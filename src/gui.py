@@ -698,7 +698,8 @@ def main():
         # Register cleanup function for window close event
         def on_closing():
             app.cleanup_resources()
-            root.destroy()
+            # Schedule destroy after all pending events are processed
+            root.after(100, root.quit)
 
         root.protocol("WM_DELETE_WINDOW", on_closing)
 
@@ -725,7 +726,8 @@ def main():
         # Register cleanup function for window close event in fallback mode
         def on_closing():
             app.cleanup_resources()
-            root.destroy()
+            # Schedule destroy after all pending events are processed
+            root.after(100, root.quit)
 
         root.protocol("WM_DELETE_WINDOW", on_closing)
 
