@@ -1,0 +1,9 @@
+pandas
+numpy
+scikit-learn
+torch
+joblib
+scipy
+matplotlib
+ttkthemes
+pillow
