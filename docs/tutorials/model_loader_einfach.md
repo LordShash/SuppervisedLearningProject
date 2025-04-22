@@ -11,7 +11,7 @@ In diesem Tutorial lernen Sie, wie Sie trainierte Modelle für die Textklassifik
 Zuerst müssen Sie das Modelllademodul importieren:
 
 ```python
-from src.model_loader import load_model, load_model_with_info
+from suppervisedlearningproject.core.model_loader import load_model, load_model_with_info
 ```
 
 ## Schritt 2: Ein Modell laden
@@ -65,18 +65,23 @@ if model is not None:
 
 ## Tipps und Tricks
 
-### Tipp 1: Überprüfen Sie, ob das Modell existiert
-Bevor Sie versuchen, ein Modell zu laden, können Sie prüfen, ob die Modelldatei existiert:
+### Tipp 1: Umgang mit nicht existierenden Modellen
+Die `load_model`-Funktion gibt `None` zurück, wenn das Modell nicht gefunden wird. Sie können dies direkt überprüfen:
 
 ```python
-import os
+# Modell laden - gibt None zurück, wenn das Modell nicht existiert
+model = load_model(model_type="logreg", target_column="Fits_Topic_Code")
 
-model_path = os.path.join("models", "logreg_Fits_Topic_Code_model.pkl")
-if os.path.exists(model_path):
-    model = load_model(model_path=model_path)
+# Überprüfen, ob das Modell geladen wurde
+if model is not None:
+    # Modell verwenden
+    predictions = model.predict(X_test)
+    print(f"Vorhersagen: {predictions}")
 else:
-    print(f"Modell nicht gefunden: {model_path}")
+    print("Kein Modell verfügbar. Bitte trainieren Sie zuerst ein Modell.")
 ```
+
+Diese Methode ist besser, da sie es ermöglicht, dass Modelldateien gelöscht oder verschoben werden können, ohne dass Ihr Code angepasst werden muss.
 
 ### Tipp 2: Verschiedene Modelle für verschiedene Aufgaben
 Sie können mehrere Modelle für verschiedene Klassifikationsaufgaben laden:

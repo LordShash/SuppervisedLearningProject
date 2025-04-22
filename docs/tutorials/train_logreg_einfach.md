@@ -11,7 +11,7 @@ Die logistische Regression ist ein leistungsfähiger Algorithmus für Klassifika
 Sie können das Modul direkt in Ihrem eigenen Python-Code importieren und verwenden:
 
 ```python
-from train_logreg import train_and_save_model
+from suppervisedlearningproject.models.train_logreg import train_and_save_model
 
 # Modell mit Standardparametern trainieren
 accuracy, precision, recall, f1, report, conf_matrix = train_and_save_model(
@@ -57,30 +57,31 @@ results = train_and_save_model(
 Das trainierte Modell wird automatisch im Verzeichnis `models/` gespeichert:
 
 ```
-models/logreg_Fits_Topic_Code_model.pkl
+models/logreg_[target_column]_model.pkl
 ```
 
 Sie können das gespeicherte Modell später für Vorhersagen verwenden:
 
 ```python
-import pickle
-import os
+from suppervisedlearningproject.core.model_loader import load_model
 from sklearn.feature_extraction.text import TfidfVectorizer
 
-# Modell laden
-model_path = os.path.join("models", "logreg_Fits_Topic_Code_model.pkl")
-with open(model_path, "rb") as f:
-    model = pickle.load(f)
+# Modell laden - gibt None zurück, wenn das Modell nicht existiert
+model = load_model(model_type="logreg", target_column="Fits_Topic_Code")
 
-# Text vektorisieren (Sie müssen denselben Vektorisierer verwenden wie beim Training)
-vectorizer = TfidfVectorizer(max_features=1000)
-# Hier müssten Sie den Vektorisierer mit denselben Daten trainieren oder speichern/laden
+# Überprüfen, ob das Modell geladen wurde
+if model is not None:
+    # Text vektorisieren (Sie müssen denselben Vektorisierer verwenden wie beim Training)
+    vectorizer = TfidfVectorizer(max_features=1000)
+    # Hier müssten Sie den Vektorisierer mit denselben Daten trainieren oder speichern/laden
 
-# Vorhersage für einen neuen Text
-text = "Dies ist ein Beispieltext für die Vorhersage."
-X_new = vectorizer.transform([text])
-prediction = model.predict(X_new)
-print(f"Vorhersage: {prediction[0]}")
+    # Vorhersage für einen neuen Text
+    text = "Dies ist ein Beispieltext für die Vorhersage."
+    X_new = vectorizer.transform([text])
+    prediction = model.predict(X_new)
+    print(f"Vorhersage: {prediction[0]}")
+else:
+    print("Kein Modell verfügbar. Bitte trainieren Sie zuerst ein Modell.")
 ```
 
 ## Interpretation der Ergebnisse

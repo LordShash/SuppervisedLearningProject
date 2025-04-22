@@ -11,7 +11,7 @@ Das Datenlademodul ist ein wichtiger Bestandteil des Projekts, da es die Daten a
 Die Hauptfunktion zum Laden der Daten ist `load_data()`. Hier ist ein einfaches Beispiel:
 
 ```python
-from data_loader import load_data
+from suppervisedlearningproject.core.data_loader import load_data
 
 # Daten mit Standardparametern laden
 X, y = load_data()
@@ -38,7 +38,7 @@ X, y = load_data(
 Wenn Sie wissen möchten, welche Zielvariablen in den Daten verfügbar sind, können Sie die Funktion `get_available_targets()` verwenden:
 
 ```python
-from data_loader import get_available_targets
+from suppervisedlearningproject.core.data_loader import get_available_targets
 
 # Verfügbare Zielvariablen abrufen
 targets = get_available_targets()
@@ -55,7 +55,7 @@ for target, info in targets.items():
 Das Modul enthält robuste Fehlerbehandlung. Hier ist ein Beispiel, wie Sie mit möglichen Fehlern umgehen können:
 
 ```python
-from data_loader import load_data, get_available_targets
+from suppervisedlearningproject.core.data_loader import load_data, get_available_targets
 
 try:
     # Versuche, Daten zu laden
@@ -75,7 +75,7 @@ except ValueError as e:
 2. **Cache leeren**: Wenn Sie Speicher freigeben möchten oder sich die Daten geändert haben, können Sie den TF-IDF-Cache leeren:
 
 ```python
-from data_loader import clear_tfidf_cache
+from suppervisedlearningproject.core.data_loader import clear_tfidf_cache
 
 # TF-IDF-Cache leeren
 clear_tfidf_cache()

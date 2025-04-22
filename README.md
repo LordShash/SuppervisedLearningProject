@@ -6,18 +6,26 @@ Dieses Projekt implementiert verschiedene Modelle für die Textklassifikation mi
 
 Die Projektstruktur wurde nach Best-Practice-Prinzipien organisiert:
 
-- `src/`: Quellcode des Projekts
-  - `data_loader.py`: Funktionen zum Laden der Daten
+- `suppervisedlearningproject/`: Hauptpaket des Projekts
+  - `core/`: Kernfunktionalität
+    - `data_loader.py`: Funktionen zum Laden der Daten
+  - `models/`: Modelltraining
+    - `train_logreg.py`: Training von logistischen Regressionsmodellen
+    - `train_nn.py`: Training von neuronalen Netzwerken
+  - `ui/`: Benutzeroberflächen
+    - `gui.py`: Standard-GUI (Tkinter)
+    - `modern_gui_complete.py`: Moderne GUI (PyQt5)
+  - `utils/`: Hilfsfunktionen
+    - `config.py`: Konfigurationseinstellungen
+  - `icons/`: Icons für die GUI
   - `main.py`: Hauptmodul zur Orchestrierung des Trainings
-  - `train_logreg.py`: Training von logistischen Regressionsmodellen
-  - `train_nn.py`: Training von neuronalen Netzwerken
-  - `gui.py`: Grafische Benutzeroberfläche für die Anwendung
-- `run_gui.py`: Startskript für die grafische Benutzeroberfläche
+- `run_gui.py`: Startskript für die Standard-GUI (Tkinter)
+- `run_modern_gui.py`: Startskript für die moderne GUI (PyQt5)
 - `data/`: Datendateien
   - `Daten_UTF8_Clean_encoded.csv`: Hauptdatendatei
   - `Daten_UTF8_Clean_encoded_part1.csv`, `Daten_UTF8_Clean_encoded_part2.csv`: Geteilte Datendateien
-- `models/`: Gespeicherte Modelle
-  - `logreg_Fits_Topic_Code_model.pkl`: Trainiertes logistisches Regressionsmodell
+- `models/`: Gespeicherte Modelle (werden während des Trainings generiert)
+  - Beispiel: `logreg_[target_column]_model.pkl`: Trainiertes logistisches Regressionsmodell
 - `docs/`: Dokumentation
   - `user_guides/`: Benutzeranleitungen
     - `anleitung.md`: Allgemeine Anleitung
@@ -64,7 +72,9 @@ Folgende Änderungen wurden an der ursprünglichen Codebasis vorgenommen:
 
 ## Verwendung der GUI
 
-Um die grafische Benutzeroberfläche zu starten, führen Sie das folgende Kommando im Hauptverzeichnis des Projekts aus:
+### Standard-GUI (Tkinter)
+
+Um die Standard-GUI zu starten, führen Sie das folgende Kommando im Hauptverzeichnis des Projekts aus:
 
 ```bash
 python run_gui.py
@@ -77,5 +87,29 @@ Die GUI bietet folgende Funktionen:
 - Auswahl der Zielvariable
 - Visualisierung der Trainingsergebnisse
 - Anzeige von Metriken, Konfusionsmatrix und Klassifikationsbericht
+
+### Moderne GUI (PyQt5)
+
+Alternativ können Sie die moderne GUI mit PyQt5 starten, die ein ansprechenderes Look-and-Feel bietet:
+
+```bash
+python run_modern_gui.py
+```
+
+Die moderne GUI bietet die gleichen Funktionen wie die Standard-GUI, aber mit einem moderneren Design:
+
+- Flaches, modernes Design mit ansprechenden Farben und Schattierungen
+- Verbesserte Benutzerfreundlichkeit durch intuitivere Bedienelemente
+- Responsives Layout, das sich an verschiedene Bildschirmgrößen anpasst
+- Verbesserte Visualisierungen mit interaktiven Elementen
+
+Für die Verwendung der modernen GUI wird PyQt5 benötigt. Das Startskript prüft automatisch, ob PyQt5 installiert ist und bietet folgende Optionen:
+
+1. **Automatische Installation**: Sie können PyQt5 direkt aus dem Skript heraus installieren, wenn Sie dazu aufgefordert werden.
+2. **Manuelle Installation**: Sie können PyQt5 auch manuell mit folgendem Befehl installieren:
+   ```bash
+   pip install PyQt5
+   ```
+3. **Fallback zur Standard-GUI**: Wenn Sie PyQt5 nicht installieren möchten, können Sie stattdessen die Standard-GUI verwenden, die keine zusätzlichen Abhängigkeiten benötigt.
 
 Eine detaillierte Anleitung zur Verwendung der GUI finden Sie in der Datei `docs/user_guides/gui_anleitung.md`.

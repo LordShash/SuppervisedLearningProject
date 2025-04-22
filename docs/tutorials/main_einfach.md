@@ -11,7 +11,7 @@ Das Hauptmodul `main.py` dient als zentraler Einstiegspunkt für das Training ve
 Sie können das Hauptmodul direkt von der Kommandozeile aus aufrufen:
 
 ```bash
-python src/main.py
+python -m suppervisedlearningproject.main
 ```
 
 Ohne weitere Parameter wird ein logistisches Regressionsmodell und ein neuronales Netz für die Zielvariable "Fits_Topic_Code" mit Standardparametern trainiert.
@@ -24,13 +24,13 @@ Das Hauptmodul unterstützt verschiedene Kommandozeilenargumente, mit denen Sie 
 
 ```bash
 # Nur logistische Regression trainieren
-python src/main.py --model logreg
+python -m suppervisedlearningproject.main --model logreg
 
 # Nur neuronales Netz trainieren
-python src/main.py --model nn
+python -m suppervisedlearningproject.main --model nn
 
 # Beide Modelle trainieren (Standard)
-python src/main.py --model all
+python -m suppervisedlearningproject.main --model all
 ```
 
 ### Zielvariable auswählen
