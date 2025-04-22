@@ -60,7 +60,7 @@ def run_test_for_model(
 
     try:
         # Pfad zum Hauptmodul (angepasst für die neue Verzeichnisstruktur)
-        main_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "src", "main.py")
+        main_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "suppervisedlearningproject", "main.py")
 
         # Prüfung der Existenz der Datei
         if not os.path.exists(main_path):
