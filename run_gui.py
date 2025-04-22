@@ -11,15 +11,14 @@ die grafische Benutzeroberfläche.
 import os
 import sys
 
-# Füge das src-Verzeichnis zum Pfad hinzu, damit die Module gefunden werden
-# Dies ermöglicht den direkten Import von Modulen aus dem src-Verzeichnis
-src_dir = os.path.join(os.path.dirname(__file__), 'src')
-sys.path.insert(0, src_dir)
+# Importiere die Konfiguration aus dem neuen Paket
+from suppervisedlearningproject.utils import setup_logging
 
-# Importiere das GUI-Modul
-# Hinweis: Der Import funktioniert, weil das src-Verzeichnis zum Pfad hinzugefügt wurde
-# IDE-Hinweis: Das Modul 'gui' befindet sich in 'src/gui.py'
-from gui import main
+# Konfiguriere das Logging für dieses Skript
+logger = setup_logging("run_gui")
+
+# Importiere das GUI-Modul aus dem neuen Paket
+from suppervisedlearningproject.ui.gui import main
 
 if __name__ == "__main__":
     # Starte die GUI-Anwendung
