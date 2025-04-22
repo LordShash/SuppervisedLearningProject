@@ -217,3 +217,38 @@ Fits_Topic_Code_1       0.90      0.83      0.86      1152
 2025-04-22 15:37:32,111 - train_logreg - INFO - Modell erfolgreich gespeichert unter: C:\Users\alexe\PycharmProjects\PythonProject\SuppervisedLearningProject\models\logreg_Fits_Topic_Code_20250422_153732_model.pkl
 2025-04-22 15:37:32,111 - train_logreg - INFO - Modell-Metadaten: {'model_type': 'LogisticRegression', 'target_column': 'Fits_Topic_Code', 'created_at': '2025-04-22T15:37:32.109954', 'python_version': '3.12.4 (tags/v3.12.4:8e8a4ba, Jun  6 2024, 19:30:16) [MSC v.1940 64 bit (AMD64)]', 'sklearn_version': 'linear_model', 'metrics': {'accuracy': 0.8011772400261609, 'precision': 0.8220357250420757, 'recall': 0.8011772400261609, 'f1': 0.8081956016185446, 'cross_val_mean': 0.7992151733158928, 'cross_val_std': 0.009202908619666644, 'test_size': 0.2, 'max_features': 1000, 'hyperparameters': {'max_iter': 1000, 'C': 1.0, 'solver': 'lbfgs'}}}
 2025-04-22 15:37:32,111 - train_logreg - INFO - Modell gespeichert unter: C:\Users\alexe\PycharmProjects\PythonProject\SuppervisedLearningProject\models\logreg_Fits_Topic_Code_20250422_153732_model.pkl
+2025-04-22 18:52:48,871 - train_logreg - INFO - Starte Training und Speicherung für Zielspalte 'Fits_Topic_Code'
+2025-04-22 18:52:48,871 - train_logreg - INFO - Lade Daten mit max_features=1000
+2025-04-22 18:52:49,023 - train_logreg - INFO - Daten geladen: X.shape=(7645, 1000), y.shape=(7645,)
+2025-04-22 18:52:49,023 - train_logreg - INFO - Starte Modelltraining
+2025-04-22 18:52:49,023 - train_logreg - INFO - Starte Training des logistischen Regressionsmodells für Zielspalte 'Fits_Topic_Code'
+2025-04-22 18:52:49,023 - train_logreg - INFO - Eingabe-Matrix ist sparse
+2025-04-22 18:52:49,025 - train_logreg - INFO - Daten aufgeteilt: 6116 Trainingsbeispiele, 1529 Testbeispiele
+2025-04-22 18:52:49,025 - train_logreg - INFO - Trainiere Modell mit Parametern: max_iter=1000, C=1.0, solver=lbfgs
+2025-04-22 18:52:50,806 - train_logreg - INFO - Modelltraining abgeschlossen
+2025-04-22 18:52:50,806 - train_logreg - INFO - Führe 5-fache Kreuzvalidierung durch
+2025-04-22 18:52:53,553 - train_logreg - INFO - Kreuzvalidierungs-Scores: [0.8057554  0.78744277 0.79790713 0.79202093 0.81294964]
+2025-04-22 18:52:53,553 - train_logreg - INFO - Mittlere CV-Accuracy: 0.7992 (±0.0092)
+2025-04-22 18:52:53,563 - train_logreg - INFO - 
+Ergebnisse für Zielspalte 'Fits_Topic_Code':
+2025-04-22 18:52:53,563 - train_logreg - INFO - Accuracy auf dem Test-Set: 0.8012
+2025-04-22 18:52:53,563 - train_logreg - INFO - Precision auf dem Test-Set: 0.8220
+2025-04-22 18:52:53,563 - train_logreg - INFO - Recall auf dem Test-Set: 0.8012
+2025-04-22 18:52:53,563 - train_logreg - INFO - F1 Score auf dem Test-Set: 0.8082
+2025-04-22 18:52:53,563 - train_logreg - INFO - 
+Klassifikationsbericht:
+2025-04-22 18:52:53,563 - train_logreg - INFO - 
+                   precision    recall  f1-score   support
+
+Fits_Topic_Code_0       0.58      0.73      0.64       377
+Fits_Topic_Code_1       0.90      0.83      0.86      1152
+
+         accuracy                           0.80      1529
+        macro avg       0.74      0.78      0.75      1529
+     weighted avg       0.82      0.80      0.81      1529
+
+2025-04-22 18:52:53,693 - train_logreg - INFO - Konfusionsmatrix-Visualisierung gespeichert
+2025-04-22 18:52:53,693 - train_logreg - INFO - Modelltraining abgeschlossen
+2025-04-22 18:52:53,694 - train_logreg - INFO - Modell erfolgreich gespeichert unter: C:\Users\alexe\PycharmProjects\PythonProject\SuppervisedLearningProject\models\logreg_Fits_Topic_Code_20250422_185253_model.pkl
+2025-04-22 18:52:53,694 - train_logreg - INFO - Modell-Metadaten: {'model_type': 'LogisticRegression', 'target_column': 'Fits_Topic_Code', 'created_at': '2025-04-22T18:52:53.693764', 'python_version': '3.12.4 (tags/v3.12.4:8e8a4ba, Jun  6 2024, 19:30:16) [MSC v.1940 64 bit (AMD64)]', 'sklearn_version': 'linear_model', 'metrics': {'accuracy': 0.8011772400261609, 'precision': 0.8220357250420757, 'recall': 0.8011772400261609, 'f1': 0.8081956016185446, 'cross_val_mean': 0.7992151733158928, 'cross_val_std': 0.009202908619666644, 'test_size': 0.2, 'max_features': 1000, 'hyperparameters': {'max_iter': 1000, 'C': 1.0, 'solver': 'lbfgs'}}}
+2025-04-22 18:52:53,694 - train_logreg - INFO - Modell gespeichert unter: C:\Users\alexe\PycharmProjects\PythonProject\SuppervisedLearningProject\models\logreg_Fits_Topic_Code_20250422_185253_model.pkl

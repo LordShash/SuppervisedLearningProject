@@ -12,11 +12,27 @@ import os
 import sys
 import glob
 import functools
+import logging
 from typing import Tuple, Dict, Any, Optional, Callable
 
 import numpy as np
 import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
+
+# Konfiguration des Loggings
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(),  # Ausgabe in die Konsole
+        logging.FileHandler(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'logs', 'data_loader.log'), 
+                           mode='a', encoding='utf-8', delay=True)  # Ausgabe in eine Datei
+    ]
+)
+logger = logging.getLogger(__name__)
+
+# Stelle sicher, dass das Logs-Verzeichnis existiert
+os.makedirs(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'logs'), exist_ok=True)
 
 
 @functools.lru_cache(maxsize=1)
@@ -91,7 +107,7 @@ def clear_tfidf_cache():
     global _tfidf_cache, _tfidf_cache_access_times
     _tfidf_cache.clear()
     _tfidf_cache_access_times.clear()
-    print("TF-IDF-Cache wurde geleert.")
+    logger.info("TF-IDF-Cache wurde geleert.")
 
 def load_data(target_column: str = 'Fits_Topic_Code', max_features: int = 1000) -> Tuple[np.ndarray, np.ndarray]:
     """
@@ -132,12 +148,12 @@ def load_data(target_column: str = 'Fits_Topic_Code', max_features: int = 1000) 
 
         # Prüfen, ob die TF-IDF-Matrix bereits im Cache ist
         if cache_key in _tfidf_cache:
-            print(f"Verwende gecachte TF-IDF-Matrix mit {max_features} Features")
+            logger.info(f"Verwende gecachte TF-IDF-Matrix mit {max_features} Features")
             # Aktualisiere den Zeitstempel für den LRU-Algorithmus
             _tfidf_cache_access_times[cache_key] = pd.Timestamp.now()
             X = _tfidf_cache[cache_key]
         else:
-            print(f"Berechne neue TF-IDF-Matrix mit {max_features} Features")
+            logger.info(f"Berechne neue TF-IDF-Matrix mit {max_features} Features")
             # Umwandlung der Textdaten in numerische Features mittels TF-IDF
             vectorizer = TfidfVectorizer(max_features=max_features)
             X = vectorizer.fit_transform(df['BODY'].values)
@@ -152,7 +168,7 @@ def load_data(target_column: str = 'Fits_Topic_Code', max_features: int = 1000) 
                 lru_key = min(_tfidf_cache_access_times.items(), key=lambda x: x[1])[0]
                 del _tfidf_cache[lru_key]
                 del _tfidf_cache_access_times[lru_key]
-                print(f"Cache-Eintrag mit Schlüssel {lru_key} entfernt (LRU-Strategie)")
+                logger.info(f"Cache-Eintrag mit Schlüssel {lru_key} entfernt (LRU-Strategie)")
 
         # Zielvariable extrahieren
         y = df[target_column].values
@@ -231,16 +247,16 @@ if __name__ == "__main__":
     try:
         # Verfügbare Zielspalten anzeigen
         targets = get_available_targets()
-        print("Verfügbare Zielspalten:")
+        logger.info("Verfügbare Zielspalten:")
         for target, info in targets.items():
-            print(f"- {target}: {info['description']}")
+            logger.info(f"- {target}: {info['description']}")
 
         # Beispiel: Daten für die erste verfügbare Zielspalte laden
         if targets:
             first_target = next(iter(targets))
             X, y = load_data(target_column=first_target)
-            print(f"\nDaten für Zielspalte '{first_target}' geladen:")
-            print(f"X: {type(X)}, Form: {X.shape}")
-            print(f"y: {type(y)}, Länge: {len(y)}")
+            logger.info(f"\nDaten für Zielspalte '{first_target}' geladen:")
+            logger.info(f"X: {type(X)}, Form: {X.shape}")
+            logger.info(f"y: {type(y)}, Länge: {len(y)}")
     except Exception as e:
-        print(f"Fehler: {str(e)}")
+        logger.error(f"Fehler: {str(e)}")
