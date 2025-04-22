@@ -26,7 +26,7 @@ logging.basicConfig(
     handlers=[
         logging.StreamHandler(),  # Ausgabe in die Konsole
         logging.FileHandler(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'logs', 'data_loader.log'), 
-                           mode='a', encoding='utf-8', delay=True)  # Ausgabe in eine Datei
+                           mode='a', encoding='utf-8')  # Ausgabe in eine Datei
     ]
 )
 logger = logging.getLogger(__name__)
@@ -94,19 +94,40 @@ def _load_dataframe() -> pd.DataFrame:
     return df
 
 
-# Cache für TF-IDF-Vektorisierung mit Zeitstempel für LRU-Implementierung
-_tfidf_cache = {}
-_tfidf_cache_access_times = {}
-_tfidf_cache_max_size = 3
+# Cache für TF-IDF-Vektorisierung mit functools.lru_cache
+_tfidf_cache_enabled = True
+_tfidf_vectorizers = {}  # Speichert die Vektorisierer für spätere Verwendung
+
+@functools.lru_cache(maxsize=3)
+def _get_tfidf_matrix(max_features: int, data_hash: int):
+    """
+    Berechnet die TF-IDF-Matrix für die gegebenen Parameter.
+    Diese Funktion wird durch lru_cache automatisch gecacht.
+
+    Args:
+        max_features: Maximale Anzahl der Features für TF-IDF
+        data_hash: Hash der Daten zur Identifikation
+
+    Returns:
+        np.ndarray: TF-IDF-Matrix
+    """
+    logger.info(f"Berechne neue TF-IDF-Matrix mit {max_features} Features")
+    df = _load_dataframe()
+    vectorizer = TfidfVectorizer(max_features=max_features)
+    X = vectorizer.fit_transform(df['BODY'].values)
+
+    # Speichere den Vektorisierer für spätere Verwendung
+    _tfidf_vectorizers[(max_features, data_hash)] = vectorizer
+
+    return X
 
 def clear_tfidf_cache():
     """
     Leert den TF-IDF-Cache vollständig.
     Nützlich, wenn sich die Daten geändert haben oder Speicher freigegeben werden soll.
     """
-    global _tfidf_cache, _tfidf_cache_access_times
-    _tfidf_cache.clear()
-    _tfidf_cache_access_times.clear()
+    _get_tfidf_matrix.cache_clear()
+    _tfidf_vectorizers.clear()
     logger.info("TF-IDF-Cache wurde geleert.")
 
 def load_data(target_column: str = 'Fits_Topic_Code', max_features: int = 1000) -> Tuple[np.ndarray, np.ndarray]:
@@ -141,34 +162,20 @@ def load_data(target_column: str = 'Fits_Topic_Code', max_features: int = 1000) 
         if 'BODY' not in df.columns:
             raise KeyError("Fehler: Die Spalte 'BODY' fehlt in der Datei. Diese wird für die Feature-Extraktion benötigt.")
 
-        # Erstelle einen eindeutigen Cache-Schlüssel basierend auf max_features und einer Prüfsumme der Daten
+        # Erstelle einen eindeutigen Hash basierend auf einer Prüfsumme der Daten
         # Dies stellt sicher, dass der Cache ungültig wird, wenn sich die Daten ändern
         data_hash = hash(tuple(df['BODY'].iloc[:100].values))  # Verwende die ersten 100 Zeilen für die Prüfsumme
-        cache_key = f"max_features_{max_features}_data_{data_hash}"
 
-        # Prüfen, ob die TF-IDF-Matrix bereits im Cache ist
-        if cache_key in _tfidf_cache:
-            logger.info(f"Verwende gecachte TF-IDF-Matrix mit {max_features} Features")
-            # Aktualisiere den Zeitstempel für den LRU-Algorithmus
-            _tfidf_cache_access_times[cache_key] = pd.Timestamp.now()
-            X = _tfidf_cache[cache_key]
+        # Verwende die gecachte Funktion, um die TF-IDF-Matrix zu erhalten
+        if _tfidf_cache_enabled:
+            X = _get_tfidf_matrix(max_features, data_hash)
+            logger.info(f"TF-IDF-Matrix mit {max_features} Features geladen (Cache: {'Hit' if _get_tfidf_matrix.cache_info().hits > 0 else 'Miss'})")
         else:
-            logger.info(f"Berechne neue TF-IDF-Matrix mit {max_features} Features")
-            # Umwandlung der Textdaten in numerische Features mittels TF-IDF
+            # Falls Cache deaktiviert ist, berechne die Matrix direkt
+            logger.info(f"Berechne TF-IDF-Matrix mit {max_features} Features (Cache deaktiviert)")
             vectorizer = TfidfVectorizer(max_features=max_features)
             X = vectorizer.fit_transform(df['BODY'].values)
-
-            # Speichern der Matrix im Cache mit aktuellem Zeitstempel
-            _tfidf_cache[cache_key] = X
-            _tfidf_cache_access_times[cache_key] = pd.Timestamp.now()
-
-            # Cache-Größe begrenzen (maximal _tfidf_cache_max_size verschiedene Einträge)
-            if len(_tfidf_cache) > _tfidf_cache_max_size:
-                # Entferne den am längsten nicht verwendeten Eintrag (LRU-Strategie)
-                lru_key = min(_tfidf_cache_access_times.items(), key=lambda x: x[1])[0]
-                del _tfidf_cache[lru_key]
-                del _tfidf_cache_access_times[lru_key]
-                logger.info(f"Cache-Eintrag mit Schlüssel {lru_key} entfernt (LRU-Strategie)")
+            _tfidf_vectorizers[(max_features, data_hash)] = vectorizer
 
         # Zielvariable extrahieren
         y = df[target_column].values

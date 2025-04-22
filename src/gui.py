@@ -22,6 +22,10 @@ from ttkthemes import ThemedTk, ThemedStyle
 from PIL import Image, ImageTk
 import matplotlib
 import atexit
+import io
+from contextlib import redirect_stdout
+import traceback
+from ctypes import windll
 matplotlib.use("TkAgg")
 
 # Importiere die Funktionen aus den anderen Modulen
@@ -287,140 +291,147 @@ class TextClassificationGUI:
         # Starte das Training in einem separaten Thread
         threading.Thread(target=self._run_training, daemon=True).start()
 
+    def _train_and_process_model(self, model_type, target_column, max_features, test_size, 
+                              train_func, model_params, param_descriptions):
+        """
+        Hilfsmethode zum Training und zur Verarbeitung eines Modells.
+
+        Args:
+            model_type: Typ des Modells ('logreg' oder 'nn')
+            target_column: Zielvariable für das Training
+            max_features: Maximale Anzahl der Features für TF-IDF
+            test_size: Anteil der Testdaten
+            train_func: Trainingsfunktion (train_logreg oder train_nn)
+            model_params: Dictionary mit modellspezifischen Parametern
+            param_descriptions: Liste von Tupeln (Parametername, Parameterwert) für die Ausgabe
+
+        Returns:
+            Tuple mit Modellschlüssel und Ergebnissen
+        """
+        # Ausgabe der Parameter
+        model_name = "logistischen Regressionsmodells" if model_type == "logreg" else "neuronalen Netzes"
+        self._append_to_output(f"Training eines {model_name} mit folgenden Parametern:\n")
+        self._append_to_output(f"Zielvariable: {target_column}")
+        self._append_to_output(f"Max Features: {max_features}")
+        self._append_to_output(f"Test Size: {test_size}")
+
+        # Ausgabe der modellspezifischen Parameter
+        for param_name, param_value in param_descriptions:
+            self._append_to_output(f"{param_name}: {param_value}")
+        self._append_to_output("")  # Leerzeile
+
+        # Training des Modells
+        self._append_to_output("Starte Training...\n")
+
+        # Umleitung der Standardausgabe
+        f = io.StringIO()
+        with redirect_stdout(f):
+            # Trainiere das Modell mit den gemeinsamen und modellspezifischen Parametern
+            results = train_func(
+                target_column=target_column,
+                max_features=max_features,
+                test_size=test_size,
+                **model_params
+            )
+            accuracy = results.accuracy
+            precision = results.precision
+            recall = results.recall
+            f1 = results.f1
+            report = results.report
+            conf_matrix = results.conf_matrix
+
+        # Ausgabe der umgeleiteten Standardausgabe
+        self._append_to_output(f.getvalue())
+
+        # Erstelle Ergebnisdictionary
+        results_dict = {
+            'accuracy': accuracy,
+            'precision': precision,
+            'recall': recall,
+            'f1': f1,
+            'report': report,
+            'conf_matrix': conf_matrix,
+            'params': {
+                'target_column': target_column,
+                'max_features': max_features,
+                'test_size': test_size,
+                **model_params
+            }
+        }
+
+        # Erstelle Modellschlüssel
+        model_key = f"{model_type}_{target_column}"
+
+        return model_key, results_dict
+
     def _run_training(self):
         """
         Führt das Training im Hintergrund aus.
         """
         try:
-            # Hole die Parameter aus den Eingabefeldern
+            # Hole die gemeinsamen Parameter aus den Eingabefeldern
             target_column = self.target_var.get()
             model_type = self.model_var.get()
             max_features = self.max_features_var.get()
             test_size = self.test_size_var.get()
 
-            # Modellspezifische Parameter
+            # Modellspezifische Parameter und Training
             if model_type == "logreg":
                 max_iter = self.max_iter_var.get()
                 c_reg = self.c_var.get()
                 solver = self.solver_var.get()
 
-                # Ausgabe der Parameter
-                self._append_to_output(f"Training eines logistischen Regressionsmodells mit folgenden Parametern:\n")
-                self._append_to_output(f"Zielvariable: {target_column}")
-                self._append_to_output(f"Max Features: {max_features}")
-                self._append_to_output(f"Test Size: {test_size}")
-                self._append_to_output(f"Max Iterations: {max_iter}")
-                self._append_to_output(f"C (Regularisierung): {c_reg}")
-                self._append_to_output(f"Solver: {solver}\n")
-
-                # Training des Modells
-                self._append_to_output("Starte Training...\n")
-
-                # Umleitung der Standardausgabe
-                import io
-                from contextlib import redirect_stdout
-
-                f = io.StringIO()
-                with redirect_stdout(f):
-                    results = train_logreg(
-                        target_column=target_column,
-                        max_features=max_features,
-                        test_size=test_size,
-                        max_iter=max_iter,
-                        C=c_reg,
-                        solver=solver
-                    )
-                    accuracy = results.accuracy
-                    precision = results.precision
-                    recall = results.recall
-                    f1 = results.f1
-                    report = results.report
-                    conf_matrix = results.conf_matrix
-
-                # Ausgabe der umgeleiteten Standardausgabe
-                self._append_to_output(f.getvalue())
-
-                # Speichern der Ergebnisse
-                model_key = f"logreg_{target_column}"
-                self.training_results[model_key] = {
-                    'accuracy': accuracy,
-                    'precision': precision,
-                    'recall': recall,
-                    'f1': f1,
-                    'report': report,
-                    'conf_matrix': conf_matrix,
-                    'params': {
-                        'target_column': target_column,
-                        'max_features': max_features,
-                        'test_size': test_size,
-                        'max_iter': max_iter,
-                        'C': c_reg,
-                        'solver': solver
-                    }
+                # Modellspezifische Parameter
+                model_params = {
+                    'max_iter': max_iter,
+                    'C': c_reg,
+                    'solver': solver
                 }
+
+                # Parameter-Beschreibungen für die Ausgabe
+                param_descriptions = [
+                    ("Max Iterations", max_iter),
+                    ("C (Regularisierung)", c_reg),
+                    ("Solver", solver)
+                ]
+
+                # Training und Verarbeitung des Modells
+                model_key, results = self._train_and_process_model(
+                    model_type, target_column, max_features, test_size,
+                    train_logreg, model_params, param_descriptions
+                )
 
             else:  # Neuronales Netz
                 epochs = self.epochs_var.get()
                 patience = self.patience_var.get()
 
-                # Ausgabe der Parameter
-                self._append_to_output(f"Training eines neuronalen Netzes mit folgenden Parametern:\n")
-                self._append_to_output(f"Zielvariable: {target_column}")
-                self._append_to_output(f"Max Features: {max_features}")
-                self._append_to_output(f"Test Size: {test_size}")
-                self._append_to_output(f"Epochs: {epochs}")
-                self._append_to_output(f"Patience: {patience}\n")
-
-                # Training des Modells
-                self._append_to_output("Starte Training...\n")
-
-                # Umleitung der Standardausgabe
-                import io
-                from contextlib import redirect_stdout
-
-                f = io.StringIO()
-                with redirect_stdout(f):
-                    results = train_nn(
-                        target_column=target_column,
-                        max_features=max_features,
-                        test_size=test_size,
-                        epochs=epochs,
-                        patience=patience
-                    )
-                    accuracy = results.accuracy
-                    precision = results.precision
-                    recall = results.recall
-                    f1 = results.f1
-                    report = results.report
-                    conf_matrix = results.conf_matrix
-
-                # Ausgabe der umgeleiteten Standardausgabe
-                self._append_to_output(f.getvalue())
-
-                # Speichern der Ergebnisse
-                model_key = f"nn_{target_column}"
-                self.training_results[model_key] = {
-                    'accuracy': accuracy,
-                    'precision': precision,
-                    'recall': recall,
-                    'f1': f1,
-                    'report': report,
-                    'conf_matrix': conf_matrix,
-                    'params': {
-                        'target_column': target_column,
-                        'max_features': max_features,
-                        'test_size': test_size,
-                        'epochs': epochs,
-                        'patience': patience
-                    }
+                # Modellspezifische Parameter
+                model_params = {
+                    'epochs': epochs,
+                    'patience': patience
                 }
+
+                # Parameter-Beschreibungen für die Ausgabe
+                param_descriptions = [
+                    ("Epochs", epochs),
+                    ("Patience", patience)
+                ]
+
+                # Training und Verarbeitung des Modells
+                model_key, results = self._train_and_process_model(
+                    model_type, target_column, max_features, test_size,
+                    train_nn, model_params, param_descriptions
+                )
+
+            # Speichern der Ergebnisse
+            self.training_results[model_key] = results
 
             # Ausgabe der Ergebnisse
             self._append_to_output("\nTraining abgeschlossen!")
-            self._append_to_output(f"Accuracy: {accuracy:.4f}")
-            self._append_to_output(f"Precision: {precision:.4f}")
-            self._append_to_output(f"Recall: {recall:.4f}")
-            self._append_to_output(f"F1 Score: {f1:.4f}")
+            self._append_to_output(f"Accuracy: {results['accuracy']:.4f}")
+            self._append_to_output(f"Precision: {results['precision']:.4f}")
+            self._append_to_output(f"Recall: {results['recall']:.4f}")
+            self._append_to_output(f"F1 Score: {results['f1']:.4f}")
 
             # Aktualisiere die Ergebnisse im Ergebnisse-Tab
             self._update_results_tab()
@@ -431,7 +442,6 @@ class TextClassificationGUI:
         except Exception as e:
             # Fehlerbehandlung
             self._append_to_output(f"\nFehler beim Training: {str(e)}")
-            import traceback
             self._append_to_output(traceback.format_exc())
         finally:
             # Aktiviere den Trainieren-Button wieder
@@ -653,7 +663,6 @@ def main():
 
         # Aktiviere DPI-Skalierung für bessere Darstellung auf hochauflösenden Displays
         try:
-            from ctypes import windll
             windll.shcore.SetProcessDpiAwareness(1)
         except:
             pass  # Ignoriere Fehler, falls nicht auf Windows oder DPI-Skalierung nicht unterstützt wird

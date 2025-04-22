@@ -53,8 +53,8 @@ Für die Featuregenerierung wird die TF-IDF-Vektorisierung (Term Frequency-Inver
 
 ### Caching-Strategie
 Das Modul verwendet zwei Caching-Mechanismen:
-1. LRU-Cache für das Laden des DataFrames
-2. Einen manuell implementierten Cache für die TF-IDF-Matrizen, begrenzt auf die drei zuletzt verwendeten Konfigurationen
+1. LRU-Cache für das Laden des DataFrames (implementiert mit `@functools.lru_cache`)
+2. LRU-Cache für die TF-IDF-Matrizen (implementiert mit `@functools.lru_cache`), begrenzt auf die drei zuletzt verwendeten Konfigurationen
 
 ## Abhängigkeiten
 - `pandas`: Für Datenmanipulation und -analyse

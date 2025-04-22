@@ -26,7 +26,7 @@ logging.basicConfig(
     handlers=[
         logging.StreamHandler(),  # Ausgabe in die Konsole
         logging.FileHandler(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'logs', 'main.log'), 
-                           mode='a', encoding='utf-8', delay=True)  # Ausgabe in eine Datei
+                           mode='a', encoding='utf-8')  # Ausgabe in eine Datei
     ]
 )
 logger = logging.getLogger(__name__)
