@@ -10,13 +10,15 @@ zu trainieren, zu evaluieren und zu speichern.
 
 import os
 import sys
-import logging
 import datetime
 from typing import Tuple, Optional, Dict, Any, Union
 from dataclasses import dataclass
 
 import joblib
 import numpy as np
+import matplotlib
+# Use Agg backend for figure generation in background threads
+matplotlib.use('Agg', force=True)
 import matplotlib.pyplot as plt
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, classification_report, precision_score, recall_score, f1_score, confusion_matrix
@@ -25,23 +27,14 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from scipy.sparse import issparse
 
-# Importiere die Datenladefunktion aus dem data_loader Modul
-from data_loader import load_data
+# Importiere die Datenladefunktion aus dem core Paket
+from suppervisedlearningproject.core.data_loader import load_data
 
-# Konfiguration des Loggings
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(),  # Ausgabe in die Konsole
-        logging.FileHandler(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'logs', 'train_logreg.log'), 
-                           mode='a', encoding='utf-8')  # Ausgabe in eine Datei
-    ]
-)
-logger = logging.getLogger(__name__)
+# Importiere die Konfiguration und richte das Logging ein
+from suppervisedlearningproject.utils import setup_logging, MODELS_DIR, LOGS_DIR, PLOTS_DIR, DEFAULT_LOGREG_CONFIG
 
-# Stelle sicher, dass das Logs-Verzeichnis existiert
-os.makedirs(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'logs'), exist_ok=True)
+# Konfiguration des Loggings mit dem zentralen Setup
+logger = setup_logging(__name__)
 
 @dataclass
 class ModelResults:
@@ -171,10 +164,8 @@ def train_logistic_regression(
             plt.tight_layout()
 
             # Speichere die Visualisierung
-            plots_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'plots')
-            os.makedirs(plots_dir, exist_ok=True)
             timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            plt.savefig(os.path.join(plots_dir, f'confusion_matrix_{target_name}_{timestamp}.png'))
+            plt.savefig(os.path.join(PLOTS_DIR, f'confusion_matrix_{target_name}_{timestamp}.png'))
             logger.info(f"Konfusionsmatrix-Visualisierung gespeichert")
         except Exception as viz_error:
             logger.warning(f"Konnte Konfusionsmatrix nicht visualisieren: {str(viz_error)}")
@@ -229,12 +220,6 @@ def save_model(
         ValueError: Wenn Probleme beim Speichern des Modells auftreten
         FileExistsError: Wenn die Datei bereits existiert und overwrite=False
     """
-    # Ermittlung des Pfads zum models-Verzeichnis relativ zum aktuellen Skript
-    models_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'models')
-
-    # Erstellung des Verzeichnisses, falls es noch nicht existiert
-    os.makedirs(models_dir, exist_ok=True)
-
     # Generierung des Dateinamens basierend auf der Zielspalte und optionalen Parametern
     timestamp = ""
     if include_timestamp:
@@ -245,7 +230,7 @@ def save_model(
         version_str = f"_{version}"
 
     filename = f"logreg_{target_column}{version_str}{timestamp}_model.pkl"
-    model_path = os.path.join(models_dir, filename)
+    model_path = os.path.join(MODELS_DIR, filename)
 
     # Prüfen, ob die Datei bereits existiert
     if os.path.exists(model_path) and not overwrite:
@@ -294,9 +279,9 @@ def train_and_save_model(
     max_features: int = 1000,
     test_size: float = 0.2, 
     random_state: int = 42,
-    max_iter: int = 1000, 
-    C: float = 1.0, 
-    solver: str = 'lbfgs',
+    max_iter: int = DEFAULT_LOGREG_CONFIG['max_iter'], 
+    C: float = DEFAULT_LOGREG_CONFIG['C'], 
+    solver: str = DEFAULT_LOGREG_CONFIG['solver'],
     cv_folds: int = 5,
     save_model_flag: bool = True,
     version: Optional[str] = None,
@@ -402,6 +387,7 @@ def train_and_save_model(
 if __name__ == "__main__":
     # Ausführung des Skripts als eigenständiges Programm
     import argparse
+    import logging
 
     # Kommandozeilenargumente parsen
     parser = argparse.ArgumentParser(description="Trainiert und speichert ein logistisches Regressionsmodell")
@@ -413,12 +399,13 @@ if __name__ == "__main__":
                         help="Anteil der Testdaten (Standard: 0.2)")
     parser.add_argument("--random-state", type=int, default=42, 
                         help="Seed für die Reproduzierbarkeit (Standard: 42)")
-    parser.add_argument("--max-iter", type=int, default=1000, 
-                        help="Maximale Anzahl von Iterationen (Standard: 1000)")
-    parser.add_argument("--c", type=float, default=1.0, 
-                        help="Regularisierungsparameter (Standard: 1.0)")
-    parser.add_argument("--solver", default="lbfgs", choices=["newton-cg", "lbfgs", "liblinear", "sag", "saga"],
-                        help="Algorithmus für die Optimierung (Standard: lbfgs)")
+    parser.add_argument("--max-iter", type=int, default=DEFAULT_LOGREG_CONFIG['max_iter'], 
+                        help=f"Maximale Anzahl von Iterationen (Standard: {DEFAULT_LOGREG_CONFIG['max_iter']})")
+    parser.add_argument("--c", type=float, default=DEFAULT_LOGREG_CONFIG['C'], 
+                        help=f"Regularisierungsparameter (Standard: {DEFAULT_LOGREG_CONFIG['C']})")
+    parser.add_argument("--solver", default=DEFAULT_LOGREG_CONFIG['solver'], 
+                        choices=["newton-cg", "lbfgs", "liblinear", "sag", "saga"],
+                        help=f"Algorithmus für die Optimierung (Standard: {DEFAULT_LOGREG_CONFIG['solver']})")
     parser.add_argument("--cv-folds", type=int, default=5, 
                         help="Anzahl der Folds für die Kreuzvalidierung (Standard: 5)")
     parser.add_argument("--no-save", action="store_true", 
@@ -447,7 +434,7 @@ if __name__ == "__main__":
             logger.info("Trainiere Modelle für mehrere Zielspalten")
 
             # Verfügbare Zielspalten ermitteln
-            from data_loader import get_available_targets
+            from suppervisedlearningproject.core.data_loader import get_available_targets
             targets = get_available_targets()
 
             # Ergebnisse für jede Zielspalte speichern

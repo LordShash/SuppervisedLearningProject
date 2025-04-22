@@ -28,10 +28,11 @@ import traceback
 from ctypes import windll
 matplotlib.use("TkAgg")
 
-# Importiere die Funktionen aus den anderen Modulen
-from data_loader import load_data, get_available_targets
-from train_logreg import train_and_save_model as train_logreg
-from train_nn import train_and_save_model as train_nn
+# Importiere die Funktionen aus den anderen Modulen mit der neuen Paketstruktur
+from suppervisedlearningproject.core.data_loader import load_data, get_available_targets
+from suppervisedlearningproject.models.train_logreg import train_and_save_model as train_logreg
+# Hinweis: train_nn.train_and_save_model ist in der minimalen Version nicht verfügbar
+# Wir importieren es hier nicht, um Fehler zu vermeiden
 
 
 class ToolTip:
@@ -276,6 +277,100 @@ class TextClassificationGUI:
             self.logreg_frame.grid_remove()
             self.nn_frame.grid()
 
+    def _init_results_tab(self):
+        """
+        Initialisiert den Ergebnisse-Tab.
+        """
+        # Container für den gesamten Inhalt mit Padding
+        content_frame = ttk.Frame(self.results_tab, padding="10")
+        content_frame.pack(fill=tk.BOTH, expand=True)
+
+        # Erstelle ein Frame für die Modellauswahl
+        model_frame = ttk.LabelFrame(content_frame, text="Modellauswahl", padding="10")
+        model_frame.pack(fill=tk.X, expand=False, padx=5, pady=5)
+
+        # Combobox für die Modellauswahl
+        ttk.Label(model_frame, text="Modell:").pack(side=tk.LEFT, padx=5)
+        self.model_select_var = tk.StringVar()
+        self.model_select_combobox = ttk.Combobox(model_frame, textvariable=self.model_select_var, state="readonly", width=30)
+        self.model_select_combobox.pack(side=tk.LEFT, padx=5)
+        self.model_select_combobox.bind("<<ComboboxSelected>>", self._on_model_selected)
+
+        # Erstelle ein Frame für die Metriken
+        metrics_frame = ttk.LabelFrame(content_frame, text="Metriken", padding="10")
+        metrics_frame.pack(fill=tk.X, expand=False, padx=5, pady=5)
+
+        # Grid für die Metriken
+        self.accuracy_var = tk.StringVar(value="N/A")
+        self.precision_var = tk.StringVar(value="N/A")
+        self.recall_var = tk.StringVar(value="N/A")
+        self.f1_var = tk.StringVar(value="N/A")
+
+        ttk.Label(metrics_frame, text="Accuracy:").grid(row=0, column=0, sticky=tk.W, padx=5, pady=5)
+        ttk.Label(metrics_frame, textvariable=self.accuracy_var).grid(row=0, column=1, sticky=tk.W, padx=5, pady=5)
+
+        ttk.Label(metrics_frame, text="Precision:").grid(row=0, column=2, sticky=tk.W, padx=5, pady=5)
+        ttk.Label(metrics_frame, textvariable=self.precision_var).grid(row=0, column=3, sticky=tk.W, padx=5, pady=5)
+
+        ttk.Label(metrics_frame, text="Recall:").grid(row=1, column=0, sticky=tk.W, padx=5, pady=5)
+        ttk.Label(metrics_frame, textvariable=self.recall_var).grid(row=1, column=1, sticky=tk.W, padx=5, pady=5)
+
+        ttk.Label(metrics_frame, text="F1 Score:").grid(row=1, column=2, sticky=tk.W, padx=5, pady=5)
+        ttk.Label(metrics_frame, textvariable=self.f1_var).grid(row=1, column=3, sticky=tk.W, padx=5, pady=5)
+
+        # Erstelle ein Frame für den Klassifikationsbericht
+        report_frame = ttk.LabelFrame(content_frame, text="Klassifikationsbericht", padding="10")
+        report_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+
+        # Textfeld für den Klassifikationsbericht
+        self.report_text = scrolledtext.ScrolledText(report_frame, wrap=tk.WORD, width=80, height=10)
+        self.report_text.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        self.report_text.config(state=tk.DISABLED)
+
+        # Erstelle ein Frame für die Konfusionsmatrix
+        self.cm_frame = ttk.LabelFrame(content_frame, text="Konfusionsmatrix", padding="10")
+        self.cm_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+
+    def _init_about_tab(self):
+        """
+        Initialisiert den Über-Tab mit Informationen zur Anwendung.
+        """
+        # Container für den gesamten Inhalt mit Padding
+        content_frame = ttk.Frame(self.about_tab, padding="10")
+        content_frame.pack(fill=tk.BOTH, expand=True)
+
+        # Titel
+        title_label = ttk.Label(content_frame, text="Textklassifikationsanwendung", font=("Segoe UI", 16, "bold"))
+        title_label.pack(pady=10)
+
+        # Beschreibung
+        description_frame = ttk.LabelFrame(content_frame, text="Beschreibung", padding="10")
+        description_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+
+        description_text = """
+        Diese Anwendung ermöglicht das Training und die Evaluation von Textklassifikationsmodellen.
+
+        Unterstützte Modelle:
+        - Logistische Regression
+        - Neuronales Netz
+
+        Die Anwendung bietet eine benutzerfreundliche Oberfläche zum Einstellen der Trainingsparameter
+        und zur Visualisierung der Ergebnisse.
+        """
+
+        description_label = ttk.Label(description_frame, text=description_text, wraplength=600, justify="left")
+        description_label.pack(padx=5, pady=5)
+
+        # Version und Copyright
+        footer_frame = ttk.Frame(content_frame)
+        footer_frame.pack(fill=tk.X, expand=False, padx=5, pady=10)
+
+        version_label = ttk.Label(footer_frame, text="Version 1.0")
+        version_label.pack(side=tk.LEFT)
+
+        copyright_label = ttk.Label(footer_frame, text="© 2025 Textklassifikationsprojekt")
+        copyright_label.pack(side=tk.RIGHT)
+
     def _train_model(self):
         """
         Trainiert das ausgewählte Modell mit den angegebenen Parametern.
@@ -418,6 +513,8 @@ class TextClassificationGUI:
                 ]
 
                 # Training und Verarbeitung des Modells
+                # Importiere train_nn nur wenn benötigt, um Fehler zu vermeiden
+                from suppervisedlearningproject.models.train_nn import train_and_save_model as train_nn
                 model_key, results = self._train_and_process_model(
                     model_type, target_column, max_features, test_size,
                     train_nn, model_params, param_descriptions
@@ -461,60 +558,6 @@ class TextClassificationGUI:
         self.output_text.insert(tk.END, text + "\n")
         self.output_text.see(tk.END)
         self.output_text.config(state=tk.DISABLED)
-
-    def _init_results_tab(self):
-        """
-        Initialisiert den Ergebnisse-Tab.
-        """
-        # Container für den gesamten Inhalt mit Padding
-        content_frame = ttk.Frame(self.results_tab, padding="10")
-        content_frame.pack(fill=tk.BOTH, expand=True)
-
-        # Erstelle ein Frame für die Modellauswahl
-        model_frame = ttk.LabelFrame(content_frame, text="Modellauswahl", padding="10")
-        model_frame.pack(fill=tk.X, expand=False, padx=5, pady=5)
-
-        # Combobox für die Modellauswahl
-        ttk.Label(model_frame, text="Modell:").pack(side=tk.LEFT, padx=5)
-        self.model_select_var = tk.StringVar()
-        self.model_select_combobox = ttk.Combobox(model_frame, textvariable=self.model_select_var, state="readonly", width=30)
-        self.model_select_combobox.pack(side=tk.LEFT, padx=5)
-        self.model_select_combobox.bind("<<ComboboxSelected>>", self._on_model_selected)
-
-        # Erstelle ein Frame für die Metriken
-        metrics_frame = ttk.LabelFrame(content_frame, text="Metriken", padding="10")
-        metrics_frame.pack(fill=tk.X, expand=False, padx=5, pady=5)
-
-        # Grid für die Metriken
-        self.accuracy_var = tk.StringVar(value="N/A")
-        self.precision_var = tk.StringVar(value="N/A")
-        self.recall_var = tk.StringVar(value="N/A")
-        self.f1_var = tk.StringVar(value="N/A")
-
-        ttk.Label(metrics_frame, text="Accuracy:").grid(row=0, column=0, sticky=tk.W, padx=5, pady=5)
-        ttk.Label(metrics_frame, textvariable=self.accuracy_var).grid(row=0, column=1, sticky=tk.W, padx=5, pady=5)
-
-        ttk.Label(metrics_frame, text="Precision:").grid(row=0, column=2, sticky=tk.W, padx=5, pady=5)
-        ttk.Label(metrics_frame, textvariable=self.precision_var).grid(row=0, column=3, sticky=tk.W, padx=5, pady=5)
-
-        ttk.Label(metrics_frame, text="Recall:").grid(row=1, column=0, sticky=tk.W, padx=5, pady=5)
-        ttk.Label(metrics_frame, textvariable=self.recall_var).grid(row=1, column=1, sticky=tk.W, padx=5, pady=5)
-
-        ttk.Label(metrics_frame, text="F1 Score:").grid(row=1, column=2, sticky=tk.W, padx=5, pady=5)
-        ttk.Label(metrics_frame, textvariable=self.f1_var).grid(row=1, column=3, sticky=tk.W, padx=5, pady=5)
-
-        # Erstelle ein Frame für den Klassifikationsbericht
-        report_frame = ttk.LabelFrame(content_frame, text="Klassifikationsbericht", padding="10")
-        report_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
-
-        # Textfeld für den Klassifikationsbericht
-        self.report_text = scrolledtext.ScrolledText(report_frame, wrap=tk.WORD, width=80, height=10)
-        self.report_text.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
-        self.report_text.config(state=tk.DISABLED)
-
-        # Erstelle ein Frame für die Konfusionsmatrix
-        self.cm_frame = ttk.LabelFrame(content_frame, text="Konfusionsmatrix", padding="10")
-        self.cm_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
     def _update_results_tab(self):
         """
@@ -578,61 +621,6 @@ class TextClassificationGUI:
         canvas = FigureCanvasTkAgg(fig, master=self.cm_frame)
         canvas.draw()
         canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
-
-    def _init_about_tab(self):
-        """
-        Initialisiert den Über-Tab mit Informationen zur Anwendung.
-        """
-        # Container für den gesamten Inhalt mit Padding
-        content_frame = ttk.Frame(self.about_tab, padding="10")
-        content_frame.pack(fill=tk.BOTH, expand=True)
-
-        # Titel
-        title_label = ttk.Label(content_frame, text="Textklassifikationsanwendung", font=("Segoe UI", 16, "bold"))
-        title_label.pack(pady=10)
-
-        # Beschreibung
-        description_frame = ttk.LabelFrame(content_frame, text="Beschreibung", padding="10")
-        description_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
-
-        description_text = """
-        Diese Anwendung ermöglicht das Training und die Evaluation von Textklassifikationsmodellen.
-
-        Unterstützte Modelle:
-        - Logistische Regression
-        - Neuronales Netz
-
-        Die Anwendung bietet eine benutzerfreundliche Oberfläche zum Einstellen der Trainingsparameter
-        und zur Visualisierung der Ergebnisse.
-        """
-
-        description_label = ttk.Label(description_frame, text=description_text, wraplength=600, justify="left")
-        description_label.pack(padx=5, pady=5)
-
-        # Anleitung
-        usage_frame = ttk.LabelFrame(content_frame, text="Anleitung", padding="10")
-        usage_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
-
-        usage_text = """
-        1. Wählen Sie im Tab "Training" die gewünschte Zielvariable und den Modelltyp aus.
-        2. Passen Sie die Parameter nach Bedarf an.
-        3. Klicken Sie auf "Modell trainieren", um das Training zu starten.
-        4. Die Ergebnisse werden im Tab "Ergebnisse" angezeigt.
-        5. Sie können zwischen verschiedenen trainierten Modellen wechseln, um die Ergebnisse zu vergleichen.
-        """
-
-        usage_label = ttk.Label(usage_frame, text=usage_text, wraplength=600, justify="left")
-        usage_label.pack(padx=5, pady=5)
-
-        # Version und Copyright
-        footer_frame = ttk.Frame(content_frame)
-        footer_frame.pack(fill=tk.X, expand=False, padx=5, pady=10)
-
-        version_label = ttk.Label(footer_frame, text="Version 1.0")
-        version_label.pack(side=tk.LEFT)
-
-        copyright_label = ttk.Label(footer_frame, text="© 2023 Textklassifikationsprojekt")
-        copyright_label.pack(side=tk.RIGHT)
 
     def cleanup_resources(self):
         """

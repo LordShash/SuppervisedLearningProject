@@ -12,27 +12,18 @@ import os
 import sys
 import glob
 import functools
-import logging
 from typing import Tuple, Dict, Any, Optional, Callable
 
 import numpy as np
 import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 
-# Konfiguration des Loggings
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(),  # Ausgabe in die Konsole
-        logging.FileHandler(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'logs', 'data_loader.log'), 
-                           mode='a', encoding='utf-8')  # Ausgabe in eine Datei
-    ]
-)
-logger = logging.getLogger(__name__)
+# Importiere die Konfiguration und richte das Logging ein
+# Angepasst für die neue Paketstruktur
+from suppervisedlearningproject.utils import setup_logging, DATA_DIR, LOGS_DIR
 
-# Stelle sicher, dass das Logs-Verzeichnis existiert
-os.makedirs(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'logs'), exist_ok=True)
+# Konfiguration des Loggings mit dem zentralen Setup
+logger = setup_logging(__name__)
 
 
 @functools.lru_cache(maxsize=1)
@@ -50,11 +41,8 @@ def _load_dataframe() -> pd.DataFrame:
         FileNotFoundError: Wenn keine Datendateien gefunden wurden
         ValueError: Wenn Probleme beim Laden der Daten auftreten
     """
-    # Basisverzeichnis für Daten ermitteln
-    data_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
-
     # Prüfen, ob geteilte Dateien existieren
-    part_files = glob.glob(os.path.join(data_dir, 'Daten_UTF8_Clean_encoded_part*.csv'))
+    part_files = glob.glob(os.path.join(DATA_DIR, 'Daten_UTF8_Clean_encoded_part*.csv'))
 
     if part_files:
         # Geteilte Dateien laden und kombinieren
@@ -77,7 +65,7 @@ def _load_dataframe() -> pd.DataFrame:
         df = pd.concat(dfs, ignore_index=True)
     else:
         # Originaldatei laden, falls geteilte Dateien nicht existieren
-        file_path = os.path.join(data_dir, 'Daten_UTF8_Clean_encoded.csv')
+        file_path = os.path.join(DATA_DIR, 'Daten_UTF8_Clean_encoded.csv')
 
         # Prüfen, ob die Originaldatei existiert
         if not os.path.exists(file_path):

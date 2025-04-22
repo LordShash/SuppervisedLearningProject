@@ -14,26 +14,14 @@ import argparse
 import logging
 from typing import Dict, Any, List, Tuple, Optional
 
-# Importiere die Funktionen aus den anderen Modulen
-from data_loader import load_data, get_available_targets, clear_tfidf_cache
-from train_logreg import train_and_save_model as train_logreg, ModelResults as LogRegResults
-from train_nn import train_and_save_model as train_nn, NNModelResults as NNResults
+# Importiere die Funktionen aus den anderen Modulen mit der neuen Paketstruktur
+from suppervisedlearningproject.core.data_loader import load_data, get_available_targets, clear_tfidf_cache
+from suppervisedlearningproject.models.train_logreg import train_and_save_model as train_logreg, ModelResults as LogRegResults
+from suppervisedlearningproject.models.train_nn import train_and_save_model as train_nn, NNModelResults as NNResults
+from suppervisedlearningproject.utils import setup_logging, LOGS_DIR
 
-# Konfiguration des Loggings
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(),  # Ausgabe in die Konsole
-        logging.FileHandler(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'logs', 'main.log'), 
-                           mode='a', encoding='utf-8')  # Ausgabe in eine Datei
-    ]
-)
-logger = logging.getLogger(__name__)
-
-# Stelle sicher, dass das Logs-Verzeichnis existiert
-os.makedirs(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'logs'), exist_ok=True)
-
+# Konfiguriere das Logging für dieses Modul
+logger = setup_logging(__name__)
 
 def parse_arguments() -> argparse.Namespace:
     """
