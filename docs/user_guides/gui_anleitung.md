@@ -1,10 +1,10 @@
-# Benutzeranleitung: Grafische Benutzeroberfläche
+# Benutzeranleitung: Moderne Grafische Benutzeroberfläche
 
-Diese Anleitung erklärt, wie Sie die grafische Benutzeroberfläche (GUI) des Textklassifikationsprojekts verwenden können.
+Diese Anleitung erklärt, wie Sie die moderne grafische Benutzeroberfläche (GUI) des Textklassifikationsprojekts verwenden können.
 
 ## Einführung
 
-Die grafische Benutzeroberfläche bietet einen benutzerfreundlichen Zugang zu den Funktionen des Textklassifikationsprojekts. Sie ermöglicht es Ihnen, Modelle zu trainieren, Parameter anzupassen und Ergebnisse zu visualisieren, ohne Kommandozeilenbefehle verwenden zu müssen.
+Die moderne grafische Benutzeroberfläche bietet einen benutzerfreundlichen Zugang zu den Funktionen des Textklassifikationsprojekts. Sie ermöglicht es Ihnen, Modelle zu trainieren, Parameter anzupassen und Ergebnisse zu visualisieren, ohne Kommandozeilenbefehle verwenden zu müssen. Die GUI basiert auf PyQt5 und bietet ein modernes Look-and-Feel mit verbesserten Visualisierungen und Benutzerinteraktionen.
 
 ## Starten der GUI
 
@@ -12,6 +12,14 @@ Um die grafische Benutzeroberfläche zu starten, führen Sie das Skript `run_gui
 
 ```bash
 python run_gui.py
+```
+
+### Hinweis zu Abhängigkeiten
+
+Die moderne GUI benötigt PyQt5. Wenn PyQt5 nicht installiert ist, wird das Skript Sie fragen, ob es automatisch installiert werden soll. Sie können PyQt5 auch manuell installieren mit:
+
+```bash
+pip install PyQt5>=5.15.0
 ```
 
 Nach dem Start wird ein Fenster mit drei Tabs angezeigt:
@@ -116,9 +124,16 @@ Weitere Informationen zur Verwendung des Modelllademodul finden Sie im Tutorial 
 ### GUI startet nicht
 
 Wenn die GUI nicht startet, überprüfen Sie:
-1. Ob alle Abhängigkeiten installiert sind (`pip install -r requirements.txt`)
-2. Ob Python 3.7 oder höher verwendet wird
-3. Ob das Skript vom richtigen Verzeichnis aus aufgerufen wird
+1. Ob PyQt5 installiert ist (`pip install PyQt5>=5.15.0`)
+2. Ob alle anderen Abhängigkeiten installiert sind (`pip install -r requirements.txt`)
+3. Ob Python 3.7 oder höher verwendet wird
+4. Ob das Skript vom richtigen Verzeichnis aus aufgerufen wird
+
+Wenn Sie Probleme mit PyQt5 haben, können Sie versuchen, es neu zu installieren:
+```bash
+pip uninstall PyQt5
+pip install PyQt5>=5.15.0
+```
 
 ### Training bricht ab
 

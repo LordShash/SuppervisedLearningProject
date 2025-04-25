@@ -42,7 +42,7 @@ SuppervisedLearningProject/
 │   ├── train_logreg.py    # Logistische Regression
 │   └── train_nn.py        # Neuronales Netz
 ├── tests/                 # Tests
-├── run_gui.py             # Startskript für die GUI
+├── run_gui.py             # Startskript für die moderne GUI
 └── README.md              # Projektübersicht
 ```
 

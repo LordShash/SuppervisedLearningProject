@@ -118,7 +118,7 @@ def clear_tfidf_cache():
     _tfidf_vectorizers.clear()
     logger.info("TF-IDF-Cache wurde geleert.")
 
-def load_data(target_column: str = 'Fits_Topic_Code', max_features: int = 1000) -> Tuple[np.ndarray, np.ndarray]:
+def load_data(target_column: str = 'Fits_Topic_Code', max_features: int = 1000, return_feature_names: bool = False) -> Tuple[np.ndarray, np.ndarray, Optional[list]]:
     """
     Lädt die Daten aus den CSV-Dateien und gibt Features und Zielvariable zurück.
     Unterstützt sowohl die ursprüngliche Datei als auch geteilte Dateien.
@@ -129,9 +129,10 @@ def load_data(target_column: str = 'Fits_Topic_Code', max_features: int = 1000) 
     Args:
         target_column: Name der Zielspalte (Standard: 'Fits_Topic_Code')
         max_features: Maximale Anzahl der Features für TF-IDF (Standard: 1000)
+        return_feature_names: Wenn True, werden auch die Feature-Namen zurückgegeben (Standard: False)
 
     Returns:
-        Tuple[np.ndarray, np.ndarray]: Features (X) und Zielvariable (y)
+        Tuple[np.ndarray, np.ndarray, Optional[list]]: Features (X), Zielvariable (y) und optional Feature-Namen
 
     Raises:
         FileNotFoundError: Wenn keine Datendateien gefunden wurden
@@ -168,8 +169,27 @@ def load_data(target_column: str = 'Fits_Topic_Code', max_features: int = 1000) 
         # Zielvariable extrahieren
         y = df[target_column].values
 
-        # Rückgabe der Features und der Zielvariable
-        return X, y
+        # Rückgabe der Features, der Zielvariable und optional der Feature-Namen
+        if return_feature_names:
+            # Hole den Vectorizer aus dem Cache oder erstelle einen neuen
+            data_hash = hash(tuple(df['BODY'].iloc[:100].values))
+            vectorizer = _tfidf_vectorizers.get((max_features, data_hash))
+
+            # Wenn kein Vectorizer im Cache ist, wurde er oben erstellt
+            if vectorizer is None and not _tfidf_cache_enabled:
+                vectorizer = _tfidf_vectorizers.get((max_features, data_hash))
+
+            # Wenn immer noch kein Vectorizer gefunden wurde, erstelle einen neuen
+            if vectorizer is None:
+                logger.warning("Vectorizer nicht im Cache gefunden, erstelle einen neuen für Feature-Namen")
+                vectorizer = TfidfVectorizer(max_features=max_features)
+                vectorizer.fit(df['BODY'].values)
+
+            # Extrahiere Feature-Namen
+            feature_names = vectorizer.get_feature_names_out()
+            return X, y, feature_names
+        else:
+            return X, y
 
     except (FileNotFoundError, ValueError, KeyError):
         # Spezifische Fehler direkt weiterleiten ohne zusätzlichen try-except Block

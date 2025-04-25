@@ -1,480 +1,92 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-
 """
-GUI-Modul für die Textklassifikationsanwendung.
+Modernes GUI-Modul für die Textklassifikationsanwendung mit PyQt5.
 
-Dieses Modul stellt eine benutzerfreundliche grafische Oberfläche bereit,
+Dieses Modul stellt eine moderne, ansprechende grafische Oberfläche bereit,
 um verschiedene Modelle zu trainieren und die Ergebnisse zu visualisieren.
+Es verwendet PyQt5 für ein modernes Look-and-Feel.
 """
 
 import os
 import sys
 import threading
-import tkinter as tk
-from tkinter import ttk, messagebox, scrolledtext
-import matplotlib.pyplot as plt
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import numpy as np
 import pandas as pd
 from typing import Dict, Any, List, Tuple, Optional
-from ttkthemes import ThemedTk, ThemedStyle
-from PIL import Image, ImageTk
-import matplotlib
-import atexit
 import io
 from contextlib import redirect_stdout
 import traceback
-from ctypes import windll
-matplotlib.use("TkAgg")
+import atexit
+import json
+import pickle
+
+# PyQt5 Imports
+from PyQt5.QtWidgets import (
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
+    QLabel, QComboBox, QPushButton, QRadioButton, QSpinBox, QDoubleSpinBox,
+    QTabWidget, QGroupBox, QFormLayout, QTextEdit, QSplitter, QFrame,
+    QTableWidget, QTableWidgetItem, QHeaderView, QMessageBox, QButtonGroup
+)
+from PyQt5.QtCore import Qt, QThread, pyqtSignal, QSize
+from PyQt5.QtGui import QFont, QIcon, QPixmap
+
+# Matplotlib für Visualisierungen
+import matplotlib
+matplotlib.use('Qt5Agg')
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.figure import Figure
+import matplotlib.pyplot as plt
 
 # Importiere die Funktionen aus den anderen Modulen mit der neuen Paketstruktur
 from suppervisedlearningproject.core.data_loader import load_data, get_available_targets
 from suppervisedlearningproject.models.train_logreg import train_and_save_model as train_logreg
-# Hinweis: train_nn.train_and_save_model ist in der minimalen Version nicht verfügbar
-# Wir importieren es hier nicht, um Fehler zu vermeiden
+from suppervisedlearningproject.models.train_nn import train_and_save_model as train_nn
+from suppervisedlearningproject.utils import BASE_DIR, DATA_DIR, MODELS_DIR, CHECKPOINTS_DIR, setup_logging
 
 
-class ToolTip:
-    """
-    Erstellt einen Tooltip für ein Widget.
-    """
-    def __init__(self, widget, text):
-        self.widget = widget
-        self.text = text
-        self.tooltip_window = None
-        self.widget.bind("<Enter>", self.show_tooltip)
-        self.widget.bind("<Leave>", self.hide_tooltip)
+class MatplotlibCanvas(FigureCanvas):
+    """Matplotlib Canvas für die Einbettung in PyQt5."""
 
-    def show_tooltip(self, event=None):
-        x, y, _, _ = self.widget.bbox("insert")
-        x += self.widget.winfo_rootx() + 25
-        y += self.widget.winfo_rooty() + 25
-
-        # Erstelle ein Toplevel-Fenster
-        self.tooltip_window = tk.Toplevel(self.widget)
-        self.tooltip_window.wm_overrideredirect(True)
-        self.tooltip_window.wm_geometry(f"+{x}+{y}")
-
-        # Erstelle ein Label mit dem Tooltip-Text
-        label = ttk.Label(self.tooltip_window, text=self.text, wraplength=250,
-                          background="#ffffe0", relief="solid", borderwidth=1,
-                          padding=(5, 5))
-        label.pack()
-
-    def hide_tooltip(self, event=None):
-        if self.tooltip_window:
-            self.tooltip_window.destroy()
-            self.tooltip_window = None
+    def __init__(self, parent=None, width=5, height=4, dpi=100):
+        self.fig = Figure(figsize=(width, height), dpi=dpi)
+        self.axes = self.fig.add_subplot(111)
+        super(MatplotlibCanvas, self).__init__(self.fig)
 
 
-class TextClassificationGUI:
-    """
-    Hauptklasse für die grafische Benutzeroberfläche der Textklassifikationsanwendung.
-    """
+class TrainingWorker(QThread):
+    """Worker-Thread für das Training im Hintergrund."""
 
-    def __init__(self, root):
-        # Store reference to figures for cleanup
-        self.figures = []
-        """
-        Initialisiert die GUI.
+    # Signale für die Kommunikation mit dem Hauptthread
+    update_output = pyqtSignal(str)
+    training_finished = pyqtSignal(dict)
+    training_error = pyqtSignal(str)
 
-        Args:
-            root: Das Hauptfenster der Anwendung
-        """
-        # Tooltip-Erklärungen für Parameter
-        self.tooltips = {
-            "max_features": "Maximale Anzahl der Features, die für die Vektorisierung verwendet werden.\nBeispiel: Eine Erhöhung von 1000 auf 2000 kann die Genauigkeit verbessern, erhöht aber auch die Rechenzeit.",
-            "test_size": "Anteil der Daten, der für den Testdatensatz verwendet wird (0.0 bis 1.0).\nBeispiel: 0.2 bedeutet 20% der Daten werden für Tests verwendet, 80% für das Training.",
-            "max_iter": "Maximale Anzahl der Iterationen für die logistische Regression.\nBeispiel: Eine Erhöhung von 100 auf 1000 kann die Konvergenz verbessern, erhöht aber die Trainingszeit.",
-            "c_reg": "Regularisierungsparameter C für die logistische Regression.\nBeispiel: Ein kleinerer Wert (z.B. 0.1) führt zu stärkerer Regularisierung und kann Overfitting reduzieren.",
-            "solver": "Algorithmus für die Optimierung der logistischen Regression.\nBeispiel: 'lbfgs' ist gut für kleine Datensätze, 'saga' für große Datensätze mit vielen Features.",
-            "epochs": "Anzahl der Trainingszyklen für das neuronale Netz.\nBeispiel: Eine Erhöhung von 10 auf 30 kann die Genauigkeit verbessern, erhöht aber die Trainingszeit.",
-            "patience": "Anzahl der Epochen ohne Verbesserung, bevor das Training frühzeitig beendet wird.\nBeispiel: Ein Wert von 5 bedeutet, dass das Training stoppt, wenn sich die Validierungsgenauigkeit 5 Epochen lang nicht verbessert."
-        }
-        self.root = root
-        self.root.title("Textklassifikation - Benutzeroberfläche")
-        self.root.geometry("1000x700")
-        self.root.minsize(800, 600)
+    def __init__(self, params):
+        super().__init__()
+        self.params = params
+        self.setTerminationEnabled(True)
 
-        # Setze Hintergrundfarbe für das Hauptfenster
-        bg_color = root.cget('background')
-        self.root.configure(background=bg_color)
-
-        # Erstelle ein Hauptframe mit Padding
-        main_frame = ttk.Frame(root, padding="10")
-        main_frame.pack(fill=tk.BOTH, expand=True)
-
-        # Erstelle ein Notebook (Tab-Container) mit modernem Aussehen
-        self.notebook = ttk.Notebook(main_frame)
-        self.notebook.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
-
-        # Erstelle die Tabs
-        self.training_tab = ttk.Frame(self.notebook)
-        self.results_tab = ttk.Frame(self.notebook)
-        self.about_tab = ttk.Frame(self.notebook)
-
-        self.notebook.add(self.training_tab, text="Training")
-        self.notebook.add(self.results_tab, text="Ergebnisse")
-        self.notebook.add(self.about_tab, text="Über")
-
-        # Initialisiere die Tabs
-        self._init_training_tab()
-        self._init_results_tab()
-        self._init_about_tab()
-
-        # Speichere die Trainingsergebnisse
-        self.training_results = {}
-
-        # Lade die verfügbaren Zielvariablen
+    def run(self):
+        """Führt das Training im Hintergrund aus."""
         try:
-            self.targets = get_available_targets()
-            for target in self.targets.keys():
-                self.target_var.set(list(self.targets.keys())[0])  # Setze die erste Zielvariable als Standard
-                self.target_combobox['values'] = list(self.targets.keys())
-        except Exception as e:
-            messagebox.showerror("Fehler", f"Fehler beim Laden der Zielvariablen: {str(e)}")
+            # Hole die gemeinsamen Parameter
+            target_column = self.params['target_column']
+            model_type = self.params['model_type']
+            max_features = self.params['max_features']
+            test_size = self.params['test_size']
 
-    def _init_training_tab(self):
-        """
-        Initialisiert den Training-Tab mit Formularelementen.
-        """
-        # Container für den gesamten Inhalt mit Padding
-        content_frame = ttk.Frame(self.training_tab, padding="10")
-        content_frame.pack(fill=tk.BOTH, expand=True)
-
-        # Erstelle ein Frame für die Eingabefelder
-        input_frame = ttk.LabelFrame(content_frame, text="Trainingsparameter", padding="10")
-        input_frame.pack(fill=tk.BOTH, expand=False, padx=5, pady=5)
-
-        # Erstelle ein Grid für die Eingabefelder
-        row = 0
-
-        # Zielvariable
-        ttk.Label(input_frame, text="Zielvariable:").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
-        self.target_var = tk.StringVar()
-        self.target_combobox = ttk.Combobox(input_frame, textvariable=self.target_var, state="readonly", width=30)
-        self.target_combobox.grid(row=row, column=1, sticky=tk.W, padx=5, pady=5)
-        row += 1
-
-        # Modelltyp
-        ttk.Label(input_frame, text="Modelltyp:").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
-        self.model_var = tk.StringVar(value="logreg")
-        model_frame = ttk.Frame(input_frame)
-        model_frame.grid(row=row, column=1, sticky=tk.W, padx=5, pady=5)
-        ttk.Radiobutton(model_frame, text="Logistische Regression", variable=self.model_var, value="logreg", command=self._toggle_model_options).pack(side=tk.LEFT, padx=5)
-        ttk.Radiobutton(model_frame, text="Neuronales Netz", variable=self.model_var, value="nn", command=self._toggle_model_options).pack(side=tk.LEFT, padx=5)
-        row += 1
-
-        # Gemeinsame Parameter
-        # Max Features
-        ttk.Label(input_frame, text="Max Features:").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
-        self.max_features_var = tk.IntVar(value=1000)
-        max_features_entry = ttk.Entry(input_frame, textvariable=self.max_features_var, width=10)
-        max_features_entry.grid(row=row, column=1, sticky=tk.W, padx=5, pady=5)
-        max_features_info = ttk.Label(input_frame, text="ℹ️", cursor="hand2")
-        max_features_info.grid(row=row, column=2, sticky=tk.W)
-        ToolTip(max_features_info, self.tooltips["max_features"])
-        row += 1
-
-        # Test Size
-        ttk.Label(input_frame, text="Test Size:").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
-        self.test_size_var = tk.DoubleVar(value=0.2)
-        test_size_entry = ttk.Entry(input_frame, textvariable=self.test_size_var, width=10)
-        test_size_entry.grid(row=row, column=1, sticky=tk.W, padx=5, pady=5)
-        test_size_info = ttk.Label(input_frame, text="ℹ️", cursor="hand2")
-        test_size_info.grid(row=row, column=2, sticky=tk.W)
-        ToolTip(test_size_info, self.tooltips["test_size"])
-        row += 1
-
-        # Parameter für logistische Regression
-        self.logreg_frame = ttk.LabelFrame(input_frame, text="Parameter für logistische Regression", padding="10")
-        self.logreg_frame.grid(row=row, column=0, columnspan=3, sticky=tk.W+tk.E, padx=5, pady=5)
-        logreg_row = 0
-
-        # Max Iterations
-        ttk.Label(self.logreg_frame, text="Max Iterations:").grid(row=logreg_row, column=0, sticky=tk.W, padx=5, pady=5)
-        self.max_iter_var = tk.IntVar(value=1000)
-        max_iter_entry = ttk.Entry(self.logreg_frame, textvariable=self.max_iter_var, width=10)
-        max_iter_entry.grid(row=logreg_row, column=1, sticky=tk.W, padx=5, pady=5)
-        max_iter_info = ttk.Label(self.logreg_frame, text="ℹ️", cursor="hand2")
-        max_iter_info.grid(row=logreg_row, column=2, sticky=tk.W)
-        ToolTip(max_iter_info, self.tooltips["max_iter"])
-        logreg_row += 1
-
-        # C (Regularisierung)
-        ttk.Label(self.logreg_frame, text="C (Regularisierung):").grid(row=logreg_row, column=0, sticky=tk.W, padx=5, pady=5)
-        self.c_var = tk.DoubleVar(value=1.0)
-        c_entry = ttk.Entry(self.logreg_frame, textvariable=self.c_var, width=10)
-        c_entry.grid(row=logreg_row, column=1, sticky=tk.W, padx=5, pady=5)
-        c_info = ttk.Label(self.logreg_frame, text="ℹ️", cursor="hand2")
-        c_info.grid(row=logreg_row, column=2, sticky=tk.W)
-        ToolTip(c_info, self.tooltips["c_reg"])
-        logreg_row += 1
-
-        # Solver
-        ttk.Label(self.logreg_frame, text="Solver:").grid(row=logreg_row, column=0, sticky=tk.W, padx=5, pady=5)
-        self.solver_var = tk.StringVar(value="lbfgs")
-        solver_combobox = ttk.Combobox(self.logreg_frame, textvariable=self.solver_var, state="readonly", width=10)
-        solver_combobox['values'] = ('lbfgs', 'newton-cg', 'liblinear', 'sag', 'saga')
-        solver_combobox.grid(row=logreg_row, column=1, sticky=tk.W, padx=5, pady=5)
-        solver_info = ttk.Label(self.logreg_frame, text="ℹ️", cursor="hand2")
-        solver_info.grid(row=logreg_row, column=2, sticky=tk.W)
-        ToolTip(solver_info, self.tooltips["solver"])
-        row += 1
-
-        # Parameter für neuronales Netz
-        self.nn_frame = ttk.LabelFrame(input_frame, text="Parameter für neuronales Netz", padding="10")
-        self.nn_frame.grid(row=row, column=0, columnspan=3, sticky=tk.W+tk.E, padx=5, pady=5)
-        self.nn_frame.grid_remove()  # Verstecke das Frame initial
-        nn_row = 0
-
-        # Epochs
-        ttk.Label(self.nn_frame, text="Epochs:").grid(row=nn_row, column=0, sticky=tk.W, padx=5, pady=5)
-        self.epochs_var = tk.IntVar(value=30)
-        epochs_entry = ttk.Entry(self.nn_frame, textvariable=self.epochs_var, width=10)
-        epochs_entry.grid(row=nn_row, column=1, sticky=tk.W, padx=5, pady=5)
-        epochs_info = ttk.Label(self.nn_frame, text="ℹ️", cursor="hand2")
-        epochs_info.grid(row=nn_row, column=2, sticky=tk.W)
-        ToolTip(epochs_info, self.tooltips["epochs"])
-        nn_row += 1
-
-        # Patience
-        ttk.Label(self.nn_frame, text="Patience:").grid(row=nn_row, column=0, sticky=tk.W, padx=5, pady=5)
-        self.patience_var = tk.IntVar(value=5)
-        patience_entry = ttk.Entry(self.nn_frame, textvariable=self.patience_var, width=10)
-        patience_entry.grid(row=nn_row, column=1, sticky=tk.W, padx=5, pady=5)
-        patience_info = ttk.Label(self.nn_frame, text="ℹ️", cursor="hand2")
-        patience_info.grid(row=nn_row, column=2, sticky=tk.W)
-        ToolTip(patience_info, self.tooltips["patience"])
-        row += 1
-
-        # Erstelle ein Frame für die Buttons
-        button_frame = ttk.Frame(content_frame, padding="10")
-        button_frame.pack(fill=tk.X, expand=False, padx=5, pady=5)
-
-        # Trainieren-Button
-        self.train_button = ttk.Button(button_frame, text="Modell trainieren", command=self._train_model, style='Action.TButton')
-        self.train_button.pack(side=tk.RIGHT, padx=5)
-
-        # Erstelle ein Frame für die Ausgabe
-        output_frame = ttk.LabelFrame(content_frame, text="Ausgabe", padding="10")
-        output_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
-
-        # Textfeld für die Ausgabe
-        self.output_text = scrolledtext.ScrolledText(output_frame, wrap=tk.WORD, width=80, height=15)
-        self.output_text.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
-        self.output_text.config(state=tk.DISABLED)
-
-    def _toggle_model_options(self):
-        """
-        Zeigt oder versteckt die modellspezifischen Parameter je nach ausgewähltem Modelltyp.
-        """
-        if self.model_var.get() == "logreg":
-            self.logreg_frame.grid()
-            self.nn_frame.grid_remove()
-        else:
-            self.logreg_frame.grid_remove()
-            self.nn_frame.grid()
-
-    def _init_results_tab(self):
-        """
-        Initialisiert den Ergebnisse-Tab.
-        """
-        # Container für den gesamten Inhalt mit Padding
-        content_frame = ttk.Frame(self.results_tab, padding="10")
-        content_frame.pack(fill=tk.BOTH, expand=True)
-
-        # Erstelle ein Frame für die Modellauswahl
-        model_frame = ttk.LabelFrame(content_frame, text="Modellauswahl", padding="10")
-        model_frame.pack(fill=tk.X, expand=False, padx=5, pady=5)
-
-        # Combobox für die Modellauswahl
-        ttk.Label(model_frame, text="Modell:").pack(side=tk.LEFT, padx=5)
-        self.model_select_var = tk.StringVar()
-        self.model_select_combobox = ttk.Combobox(model_frame, textvariable=self.model_select_var, state="readonly", width=30)
-        self.model_select_combobox.pack(side=tk.LEFT, padx=5)
-        self.model_select_combobox.bind("<<ComboboxSelected>>", self._on_model_selected)
-
-        # Erstelle ein Frame für die Metriken
-        metrics_frame = ttk.LabelFrame(content_frame, text="Metriken", padding="10")
-        metrics_frame.pack(fill=tk.X, expand=False, padx=5, pady=5)
-
-        # Grid für die Metriken
-        self.accuracy_var = tk.StringVar(value="N/A")
-        self.precision_var = tk.StringVar(value="N/A")
-        self.recall_var = tk.StringVar(value="N/A")
-        self.f1_var = tk.StringVar(value="N/A")
-
-        ttk.Label(metrics_frame, text="Accuracy:").grid(row=0, column=0, sticky=tk.W, padx=5, pady=5)
-        ttk.Label(metrics_frame, textvariable=self.accuracy_var).grid(row=0, column=1, sticky=tk.W, padx=5, pady=5)
-
-        ttk.Label(metrics_frame, text="Precision:").grid(row=0, column=2, sticky=tk.W, padx=5, pady=5)
-        ttk.Label(metrics_frame, textvariable=self.precision_var).grid(row=0, column=3, sticky=tk.W, padx=5, pady=5)
-
-        ttk.Label(metrics_frame, text="Recall:").grid(row=1, column=0, sticky=tk.W, padx=5, pady=5)
-        ttk.Label(metrics_frame, textvariable=self.recall_var).grid(row=1, column=1, sticky=tk.W, padx=5, pady=5)
-
-        ttk.Label(metrics_frame, text="F1 Score:").grid(row=1, column=2, sticky=tk.W, padx=5, pady=5)
-        ttk.Label(metrics_frame, textvariable=self.f1_var).grid(row=1, column=3, sticky=tk.W, padx=5, pady=5)
-
-        # Erstelle ein Frame für den Klassifikationsbericht
-        report_frame = ttk.LabelFrame(content_frame, text="Klassifikationsbericht", padding="10")
-        report_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
-
-        # Textfeld für den Klassifikationsbericht
-        self.report_text = scrolledtext.ScrolledText(report_frame, wrap=tk.WORD, width=80, height=10)
-        self.report_text.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
-        self.report_text.config(state=tk.DISABLED)
-
-        # Erstelle ein Frame für die Konfusionsmatrix
-        self.cm_frame = ttk.LabelFrame(content_frame, text="Konfusionsmatrix", padding="10")
-        self.cm_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
-
-    def _init_about_tab(self):
-        """
-        Initialisiert den Über-Tab mit Informationen zur Anwendung.
-        """
-        # Container für den gesamten Inhalt mit Padding
-        content_frame = ttk.Frame(self.about_tab, padding="10")
-        content_frame.pack(fill=tk.BOTH, expand=True)
-
-        # Titel
-        title_label = ttk.Label(content_frame, text="Textklassifikationsanwendung", font=("Segoe UI", 16, "bold"))
-        title_label.pack(pady=10)
-
-        # Beschreibung
-        description_frame = ttk.LabelFrame(content_frame, text="Beschreibung", padding="10")
-        description_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
-
-        description_text = """
-        Diese Anwendung ermöglicht das Training und die Evaluation von Textklassifikationsmodellen.
-
-        Unterstützte Modelle:
-        - Logistische Regression
-        - Neuronales Netz
-
-        Die Anwendung bietet eine benutzerfreundliche Oberfläche zum Einstellen der Trainingsparameter
-        und zur Visualisierung der Ergebnisse.
-        """
-
-        description_label = ttk.Label(description_frame, text=description_text, wraplength=600, justify="left")
-        description_label.pack(padx=5, pady=5)
-
-        # Version und Copyright
-        footer_frame = ttk.Frame(content_frame)
-        footer_frame.pack(fill=tk.X, expand=False, padx=5, pady=10)
-
-        version_label = ttk.Label(footer_frame, text="Version 1.0")
-        version_label.pack(side=tk.LEFT)
-
-        copyright_label = ttk.Label(footer_frame, text="© 2025 Textklassifikationsprojekt")
-        copyright_label.pack(side=tk.RIGHT)
-
-    def _train_model(self):
-        """
-        Trainiert das ausgewählte Modell mit den angegebenen Parametern.
-        """
-        # Deaktiviere den Trainieren-Button während des Trainings
-        self.train_button.config(state=tk.DISABLED)
-
-        # Leere das Ausgabefeld
-        self.output_text.config(state=tk.NORMAL)
-        self.output_text.delete(1.0, tk.END)
-        self.output_text.config(state=tk.DISABLED)
-
-        # Starte das Training in einem separaten Thread
-        threading.Thread(target=self._run_training, daemon=True).start()
-
-    def _train_and_process_model(self, model_type, target_column, max_features, test_size, 
-                              train_func, model_params, param_descriptions):
-        """
-        Hilfsmethode zum Training und zur Verarbeitung eines Modells.
-
-        Args:
-            model_type: Typ des Modells ('logreg' oder 'nn')
-            target_column: Zielvariable für das Training
-            max_features: Maximale Anzahl der Features für TF-IDF
-            test_size: Anteil der Testdaten
-            train_func: Trainingsfunktion (train_logreg oder train_nn)
-            model_params: Dictionary mit modellspezifischen Parametern
-            param_descriptions: Liste von Tupeln (Parametername, Parameterwert) für die Ausgabe
-
-        Returns:
-            Tuple mit Modellschlüssel und Ergebnissen
-        """
-        # Ausgabe der Parameter
-        model_name = "logistischen Regressionsmodells" if model_type == "logreg" else "neuronalen Netzes"
-        self._append_to_output(f"Training eines {model_name} mit folgenden Parametern:\n")
-        self._append_to_output(f"Zielvariable: {target_column}")
-        self._append_to_output(f"Max Features: {max_features}")
-        self._append_to_output(f"Test Size: {test_size}")
-
-        # Ausgabe der modellspezifischen Parameter
-        for param_name, param_value in param_descriptions:
-            self._append_to_output(f"{param_name}: {param_value}")
-        self._append_to_output("")  # Leerzeile
-
-        # Training des Modells
-        self._append_to_output("Starte Training...\n")
-
-        # Umleitung der Standardausgabe
-        f = io.StringIO()
-        with redirect_stdout(f):
-            # Trainiere das Modell mit den gemeinsamen und modellspezifischen Parametern
-            results = train_func(
-                target_column=target_column,
-                max_features=max_features,
-                test_size=test_size,
-                **model_params
-            )
-            accuracy = results.accuracy
-            precision = results.precision
-            recall = results.recall
-            f1 = results.f1
-            report = results.report
-            conf_matrix = results.conf_matrix
-
-        # Ausgabe der umgeleiteten Standardausgabe
-        self._append_to_output(f.getvalue())
-
-        # Erstelle Ergebnisdictionary
-        results_dict = {
-            'accuracy': accuracy,
-            'precision': precision,
-            'recall': recall,
-            'f1': f1,
-            'report': report,
-            'conf_matrix': conf_matrix,
-            'params': {
-                'target_column': target_column,
-                'max_features': max_features,
-                'test_size': test_size,
-                **model_params
-            }
-        }
-
-        # Erstelle Modellschlüssel
-        model_key = f"{model_type}_{target_column}"
-
-        return model_key, results_dict
-
-    def _run_training(self):
-        """
-        Führt das Training im Hintergrund aus.
-        """
-        try:
-            # Hole die gemeinsamen Parameter aus den Eingabefeldern
-            target_column = self.target_var.get()
-            model_type = self.model_var.get()
-            max_features = self.max_features_var.get()
-            test_size = self.test_size_var.get()
+            # Ausgabe der Parameter mit verbesserter Formatierung
+            model_name = "logistischen Regressionsmodells" if model_type == "logreg" else "neuronalen Netzes"
+            self.update_output.emit(f"=== Training eines {model_name} ===\n")
+            self.update_output.emit(f"Allgemeine Parameter:")
+            self.update_output.emit(f"  • Zielvariable:  {target_column}")
+            self.update_output.emit(f"  • Max Features:  {max_features}")
+            self.update_output.emit(f"  • Test Size:     {test_size}")
 
             # Modellspezifische Parameter und Training
             if model_type == "logreg":
-                max_iter = self.max_iter_var.get()
-                c_reg = self.c_var.get()
-                solver = self.solver_var.get()
+                max_iter = self.params['max_iter']
+                c_reg = self.params['c_reg']
+                solver = self.params['solver']
 
                 # Modellspezifische Parameter
                 model_params = {
@@ -483,22 +95,30 @@ class TextClassificationGUI:
                     'solver': solver
                 }
 
-                # Parameter-Beschreibungen für die Ausgabe
-                param_descriptions = [
-                    ("Max Iterations", max_iter),
-                    ("C (Regularisierung)", c_reg),
-                    ("Solver", solver)
-                ]
+                # Parameter-Beschreibungen für die Ausgabe mit verbesserter Formatierung
+                self.update_output.emit(f"Modellspezifische Parameter:")
+                self.update_output.emit(f"  • Max Iterations:    {max_iter}")
+                self.update_output.emit(f"  • C (Regularisierung): {c_reg}")
+                self.update_output.emit(f"  • Solver:           {solver}")
+                self.update_output.emit("")  # Leerzeile
 
-                # Training und Verarbeitung des Modells
-                model_key, results = self._train_and_process_model(
-                    model_type, target_column, max_features, test_size,
-                    train_logreg, model_params, param_descriptions
-                )
+                # Training des Modells
+                self.update_output.emit("=== Starte Training ===\n")
+
+                # Umleitung der Standardausgabe
+                f = io.StringIO()
+                with redirect_stdout(f):
+                    # Trainiere das Modell
+                    results = train_logreg(
+                        target_column=target_column,
+                        max_features=max_features,
+                        test_size=test_size,
+                        **model_params
+                    )
 
             else:  # Neuronales Netz
-                epochs = self.epochs_var.get()
-                patience = self.patience_var.get()
+                epochs = self.params['epochs']
+                patience = self.params['patience']
 
                 # Modellspezifische Parameter
                 model_params = {
@@ -506,121 +126,485 @@ class TextClassificationGUI:
                     'patience': patience
                 }
 
-                # Parameter-Beschreibungen für die Ausgabe
-                param_descriptions = [
-                    ("Epochs", epochs),
-                    ("Patience", patience)
-                ]
+                # Parameter-Beschreibungen für die Ausgabe mit verbesserter Formatierung
+                self.update_output.emit(f"Modellspezifische Parameter:")
+                self.update_output.emit(f"  • Epochs:           {epochs}")
+                self.update_output.emit(f"  • Patience:         {patience}")
+                self.update_output.emit("")  # Leerzeile
 
-                # Training und Verarbeitung des Modells
-                # Importiere train_nn nur wenn benötigt, um Fehler zu vermeiden
-                from suppervisedlearningproject.models.train_nn import train_and_save_model as train_nn
-                model_key, results = self._train_and_process_model(
-                    model_type, target_column, max_features, test_size,
-                    train_nn, model_params, param_descriptions
-                )
+                # Training des Modells
+                self.update_output.emit("=== Starte Training ===\n")
 
-            # Speichern der Ergebnisse
-            self.training_results[model_key] = results
+                # Umleitung der Standardausgabe
+                f = io.StringIO()
+                with redirect_stdout(f):
+                    # Trainiere das Modell
+                    results = train_nn(
+                        target_column=target_column,
+                        max_features=max_features,
+                        test_size=test_size,
+                        **model_params
+                    )
 
-            # Ausgabe der Ergebnisse
-            self._append_to_output("\nTraining abgeschlossen!")
-            self._append_to_output(f"Accuracy: {results['accuracy']:.4f}")
-            self._append_to_output(f"Precision: {results['precision']:.4f}")
-            self._append_to_output(f"Recall: {results['recall']:.4f}")
-            self._append_to_output(f"F1 Score: {results['f1']:.4f}")
+            # Ausgabe der umgeleiteten Standardausgabe
+            self.update_output.emit(f.getvalue())
 
-            # Aktualisiere die Ergebnisse im Ergebnisse-Tab
-            self._update_results_tab()
+            # Extrahiere die Ergebnisse
+            accuracy = results.accuracy
+            precision = results.precision
+            recall = results.recall
+            f1 = results.f1
+            report = results.report
+            conf_matrix = results.conf_matrix
+            class_names = results.class_names
+            roc_curve_data = results.roc_curve_data
+            auc_scores = results.auc_scores
 
-            # Wechsle zum Ergebnisse-Tab
-            self.root.after(0, lambda: self.notebook.select(1))
+            # Erstelle Ergebnisdictionary
+            results_dict = {
+                'model_type': model_type,
+                'target_column': target_column,
+                'accuracy': accuracy,
+                'precision': precision,
+                'recall': recall,
+                'f1': f1,
+                'report': report,
+                'conf_matrix': conf_matrix,
+                'class_names': class_names,
+                'roc_curve_data': roc_curve_data,
+                'auc_scores': auc_scores,
+                'params': {
+                    'target_column': target_column,
+                    'max_features': max_features,
+                    'test_size': test_size,
+                    **model_params
+                }
+            }
+
+            # Ausgabe der Ergebnisse mit verbesserter Formatierung
+            self.update_output.emit("\n=== Training abgeschlossen ===")
+            self.update_output.emit("\nErgebnismetriken:")
+            self.update_output.emit(f"  • Accuracy:    {accuracy:.4f}")
+            self.update_output.emit(f"  • Precision:   {precision:.4f}")
+            self.update_output.emit(f"  • Recall:      {recall:.4f}")
+            self.update_output.emit(f"  • F1 Score:    {f1:.4f}")
+
+            # Sende die Ergebnisse an den Hauptthread
+            self.training_finished.emit(results_dict)
 
         except Exception as e:
-            # Fehlerbehandlung
-            self._append_to_output(f"\nFehler beim Training: {str(e)}")
-            self._append_to_output(traceback.format_exc())
-        finally:
-            # Aktiviere den Trainieren-Button wieder
-            self.root.after(0, lambda: self.train_button.config(state=tk.NORMAL))
+            # Fehlerbehandlung mit verbesserter Formatierung
+            self.update_output.emit("\n=== Fehler beim Training ===")
+            self.update_output.emit(f"Fehlermeldung: {str(e)}")
+            self.update_output.emit("\nDetails:")
+            self.update_output.emit(traceback.format_exc())
+            self.training_error.emit(str(e))
 
-    def _append_to_output(self, text):
+
+class ModernTextClassificationGUI(QMainWindow):
+    """Hauptklasse für die moderne grafische Benutzeroberfläche der Textklassifikationsanwendung."""
+
+    def __init__(self):
+        super().__init__()
+
+        # Store reference to figures for cleanup
+        self.figures = []
+
+        # Tooltip-Erklärungen für Parameter mit detaillierten Informationen
+        self.tooltips = {
+            # Gemeinsame Parameter
+            "max_features": """Maximale Anzahl der Features, die für die Vektorisierung verwendet werden.
+
+Ein höherer Wert (z.B. 2000 statt 1000) kann die Genauigkeit verbessern, erhöht aber auch:
+• Die Rechenzeit für das Training
+• Den Speicherbedarf des Modells
+• Das Risiko von Overfitting bei kleinen Datensätzen
+
+Empfohlene Werte:
+• Für kleine Datensätze: 500-1000
+• Für mittlere Datensätze: 1000-2000
+• Für große Datensätze: 2000-5000""",
+
+            "test_size": """Anteil der Daten, der für den Testdatensatz verwendet wird (0.0 bis 1.0).
+
+Ein Wert von 0.2 bedeutet, dass 20% der Daten für Tests und 80% für das Training verwendet werden.
+
+Auswirkungen:
+• Kleinerer Wert (z.B. 0.1): Mehr Trainingsdaten, aber weniger zuverlässige Evaluierung
+• Größerer Wert (z.B. 0.3): Weniger Trainingsdaten, aber zuverlässigere Evaluierung
+
+Empfohlene Werte:
+• Standard: 0.2 (20%)
+• Bei kleinen Datensätzen: 0.15-0.2
+• Bei großen Datensätzen: 0.2-0.25""",
+
+            # Logistische Regression Parameter
+            "max_iter": """Maximale Anzahl der Iterationen für die logistische Regression.
+
+Bestimmt, wie lange das Modell versucht, eine optimale Lösung zu finden.
+
+Auswirkungen:
+• Zu niedrig: Das Modell konvergiert möglicherweise nicht (Warnmeldung)
+• Zu hoch: Längere Trainingszeit, aber bessere Chance auf Konvergenz
+
+Empfohlene Werte:
+• Standard: 1000
+• Bei komplexen Problemen: 2000-5000
+• Bei einfachen Problemen: 500-1000""",
+
+            "c_reg": """Regularisierungsparameter C für die logistische Regression.
+
+Kontrolliert die Stärke der Regularisierung (Vermeidung von Overfitting).
+
+Auswirkungen:
+• Kleinerer Wert (z.B. 0.1): Stärkere Regularisierung, einfacheres Modell
+• Größerer Wert (z.B. 10.0): Schwächere Regularisierung, komplexeres Modell
+
+Empfohlene Werte:
+• Standard: 1.0
+• Bei Overfitting: 0.1-0.5
+• Bei Underfitting: 2.0-10.0""",
+
+            "solver": """Algorithmus für die Optimierung der logistischen Regression.
+
+Verschiedene Solver haben unterschiedliche Stärken und Schwächen:
+
+• lbfgs: Schnell für kleine bis mittlere Datensätze, gut für Multiclass-Probleme
+• newton-cg: Präzise, aber rechenintensiv
+• liblinear: Gut für kleine Datensätze, nur für binäre Klassifikation oder One-vs-Rest
+• sag: Schnell für große Datensätze
+• saga: Schnell für große Datensätze, unterstützt L1-Regularisierung
+
+Empfehlung:
+• Für die meisten Fälle: lbfgs
+• Für sehr große Datensätze: saga""",
+
+            # Neuronales Netz Parameter
+            "epochs": """Anzahl der Trainingszyklen für das neuronale Netz.
+
+Ein Epoch bedeutet, dass das Modell einmal den gesamten Trainingsdatensatz durchlaufen hat.
+
+Auswirkungen:
+• Zu wenige Epochs: Underfitting (Modell lernt nicht genug)
+• Zu viele Epochs: Overfitting und längere Trainingszeit
+
+Empfohlene Werte:
+• Standard: 30
+• Bei komplexen Problemen: 50-100
+• Bei einfachen Problemen: 10-20
+
+Hinweis: Early Stopping (über 'Patience') kann helfen, die optimale Anzahl automatisch zu finden.""",
+
+            "patience": """Anzahl der Epochen ohne Verbesserung, bevor das Training frühzeitig beendet wird.
+
+Dies ist ein Early-Stopping-Mechanismus, der Overfitting verhindert.
+
+Auswirkungen:
+• Kleinerer Wert (z.B. 2): Schnelleres Training, aber Risiko von vorzeitigem Abbruch
+• Größerer Wert (z.B. 10): Längeres Training, aber bessere Chance auf Konvergenz
+
+Empfohlene Werte:
+• Standard: 5
+• Bei instabilem Training: 7-10
+• Bei stabilem Training: 3-5"""
+        }
+
+        # Speichere die Trainingsergebnisse
+        self.training_results = {}
+
+        # Pfad zur Datei mit den gespeicherten Trainingsergebnissen
+        self.results_file = os.path.join(DATA_DIR, 'training_results.pkl')
+
+        # Lade gespeicherte Trainingsergebnisse, falls vorhanden
+        self.load_training_results()
+
+        # Initialisiere die UI
+        self.init_ui()
+
+        # Aktualisiere die Ergebnisse im Ergebnisse-Tab mit den geladenen Daten
+        self.update_results_tab()
+
+        # Lade die verfügbaren Zielvariablen
+        try:
+            self.targets = get_available_targets()
+            self.target_combo.addItems(list(self.targets.keys()))
+        except Exception as e:
+            QMessageBox.critical(self, "Fehler", f"Fehler beim Laden der Zielvariablen: {str(e)}")
+
+    def init_ui(self):
+        """Initialisiert die Benutzeroberfläche."""
+        # Setze Fenstertitel und Größe
+        self.setWindowTitle("Textklassifikation - Moderne Benutzeroberfläche")
+        self.setMinimumSize(1000, 700)
+
+        # Empfohlene Größe für bessere Darstellung
+        self.resize(1200, 800)
+
+        # Erstelle ein zentrales Widget
+        central_widget = QWidget()
+        self.setCentralWidget(central_widget)
+
+        # Hauptlayout mit Margins für besseren Abstand zum Rand
+        main_layout = QVBoxLayout(central_widget)
+        main_layout.setContentsMargins(10, 10, 10, 10)
+        main_layout.setSpacing(10)
+
+        # Erstelle ein Tab-Widget
+        self.tab_widget = QTabWidget()
+        main_layout.addWidget(self.tab_widget)
+
+        # Erstelle die Tabs
+        self.init_training_tab()
+        self.init_results_tab()
+        self.init_about_tab()
+
+        # Setze das Stylesheet für ein modernes Aussehen
+        self.set_stylesheet()
+
+        # Verbinde das Tab-Changed-Signal mit einer Methode zur Anpassung der Layouts
+        self.tab_widget.currentChanged.connect(self.on_tab_changed)
+
+    def init_training_tab(self):
+        """Initialisiert den Training-Tab."""
+        # Einfache Implementierung für den Test
+        training_tab = QWidget()
+        self.tab_widget.addTab(training_tab, "Training")
+
+    def init_results_tab(self):
+        """Initialisiert den Ergebnisse-Tab mit Visualisierungen."""
+        # Erstelle den Tab
+        results_tab = QWidget()
+        self.tab_widget.addTab(results_tab, "Ergebnisse")
+
+        # Layout für den Tab
+        layout = QVBoxLayout(results_tab)
+
+        # Modellauswahl
+        model_select_group = QGroupBox("Modellauswahl")
+        layout.addWidget(model_select_group)
+        model_select_layout = QHBoxLayout(model_select_group)
+
+        model_select_label = QLabel("Modell:")
+        self.model_select_combo = QComboBox()
+
+        # Initialisiere auch die Konfusionsmatrix-Modellauswahl
+        # Diese wird in update_results_tab verwendet
+        self.confusion_model_select_combo = QComboBox()
+
+        model_select_layout.addWidget(model_select_label)
+        model_select_layout.addWidget(self.model_select_combo)
+
+    def init_about_tab(self):
+        """Initialisiert den Über-Tab."""
+        # Einfache Implementierung für den Test
+        about_tab = QWidget()
+        self.tab_widget.addTab(about_tab, "Über")
+
+    def update_results_tab(self):
+        """Aktualisiert die Modellauswahl in allen Tabs."""
+        try:
+            # Prüfe, ob training_results existiert und ein Dictionary ist
+            if not hasattr(self, 'training_results') or not isinstance(self.training_results, dict):
+                logger = setup_logging("gui")
+                logger.warning("Warnung: training_results ist nicht verfügbar oder kein Dictionary")
+                return
+
+            # Blockiere Signale, um unerwünschte Aktualisierungen zu vermeiden
+            if hasattr(self, 'model_select_combo'):
+                self.model_select_combo.blockSignals(True)
+            if hasattr(self, 'confusion_model_select_combo'):
+                self.confusion_model_select_combo.blockSignals(True)
+
+            # Entsperre die Signale wieder
+            if hasattr(self, 'model_select_combo'):
+                self.model_select_combo.blockSignals(False)
+            if hasattr(self, 'confusion_model_select_combo'):
+                self.confusion_model_select_combo.blockSignals(False)
+
+        except Exception as e:
+            # Fange alle Ausnahmen ab und protokolliere sie
+            logger = setup_logging("gui")
+            logger.error(f"Fehler in update_results_tab: {str(e)}")
+
+    def set_stylesheet(self):
+        """Setzt das Stylesheet für ein modernes Aussehen."""
+        self.setStyleSheet("""
+            /* Globale Schriftart-Einstellungen für Konsistenz */
+            * {
+                font-family: "Segoe UI", Arial, sans-serif;
+                font-size: 10pt;
+            }
+
+            QMainWindow {
+                background-color: #f0f4f8;  /* Hellerer, moderner Blauton als Hintergrund */
+            }
+
+            /* Responsive Design für Tabs */
+            QTabWidget::pane {
+                border: 1px solid #d0d9e1;
+                background-color: white;
+                border-radius: 6px;
+                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);  /* Subtiler Schatten für Tiefe */
+            }
+
+            QTabBar::tab {
+                background-color: #e8eef4;
+                border: 1px solid #d0d9e1;
+                border-bottom-color: #d0d9e1;
+                border-top-left-radius: 6px;
+                border-top-right-radius: 6px;
+                min-width: 8ex;
+                padding: 8px 16px;
+                margin-right: 2px;
+                color: #455a64;  /* Dunklerer Blauton für Text */
+                /* Verbesserte Textdarstellung */
+                text-align: center;
+            }
+
+            QTabBar::tab:selected {
+                background-color: white;
+                border-bottom-color: white;
+                color: #00796b;  /* Türkis für ausgewählten Tab */
+                font-weight: bold;
+                /* Etwas mehr horizontale Polsterung für die fette Schrift */
+                padding: 8px 20px;
+                /* Erlaube dem Tab, sich an die Textbreite anzupassen */
+                min-width: 12ex;
+                /* Verbesserte Textdarstellung */
+                text-align: center;
+            }
+
+            QTabBar::tab:hover {
+                background-color: #f5f9ff;
+                color: #00796b;  /* Türkis beim Hover */
+                /* Verbesserte Textdarstellung */
+                text-align: center;
+            }
+
+            /* Buttons mit modernem Design */
+            QPushButton {
+                background-color: #009688;  /* Modernes Türkis statt Blau */
+                color: white;
+                border: none;
+                border-radius: 6px;
+                padding: 8px 16px;
+                font-weight: bold;
+                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);  /* Subtiler Schatten für Tiefe */
+            }
+
+            QPushButton:hover {
+                background-color: #00897b;  /* Dunkleres Türkis beim Hover */
+                box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);  /* Stärkerer Schatten beim Hover */
+            }
+
+            QPushButton:pressed {
+                background-color: #00695c;  /* Noch dunkleres Türkis beim Drücken */
+                box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);  /* Flacherer Schatten beim Drücken */
+            }
+
+            QPushButton:disabled {
+                background-color: #b2dfdb;  /* Helleres Türkis für deaktivierte Buttons */
+                color: #e0f2f1;
+                box-shadow: none;
+            }
+
+            /* Gruppierungen mit modernem Design */
+            QGroupBox {
+                border: 1px solid #d0d9e1;
+                border-radius: 6px;
+                margin-top: 1.5ex;
+                font-weight: bold;
+                background-color: rgba(255, 255, 255, 0.7);  /* Leicht transparentes Weiß */
+                box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);  /* Sehr subtiler Schatten */
+                padding-top: 16px;  /* Mehr Platz für den Titel */
+            }
+
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                subcontrol-position: top left;
+                padding: 0 5px;
+                color: #00796b;  /* Türkis für Gruppentitel */
+                font-weight: bold;
+            }
+
+            /* Eingabefelder mit einheitlichem Design */
+            QComboBox, QSpinBox, QDoubleSpinBox {
+                border: 1px solid #d0d9e1;
+                border-radius: 6px;
+                padding: 5px;
+                background-color: white;
+                selection-background-color: #e0f2f1;  /* Helles Türkis für Auswahl */
+                min-height: 25px;  /* Mindesthöhe für bessere Bedienbarkeit */
+            }
+
+            /* Textfelder mit Monospace-Schrift für bessere Lesbarkeit von Code und Berichten */
+            QTextEdit {
+                border: 1px solid #d0d9e1;
+                border-radius: 6px;
+                background-color: white;
+                font-family: "Consolas", "Courier New", monospace;
+                font-size: 10pt;
+                line-height: 1.5;
+                selection-background-color: #e0f2f1;  /* Helles Türkis für Textauswahl */
+                padding: 8px;
+                min-height: 100px;  /* Mindesthöhe für bessere Lesbarkeit */
+            }
+
+            /* Labels mit einheitlichem Design */
+            QLabel {
+                color: #37474f;  /* Dunklerer, moderner Blauton für Text */
+                min-height: 20px;  /* Mindesthöhe für bessere Lesbarkeit */
+            }
+
+            /* Splitter für anpassbare Layouts */
+            QSplitter::handle {
+                background-color: #d0d9e1;
+                height: 2px;
+            }
+
+            QSplitter::handle:hover {
+                background-color: #009688;  /* Türkis beim Hover */
+            }
+
+            /* Tooltip-Stil für Informationsanzeigen */
+            QToolTip {
+                background-color: #f5f5f5;
+                color: #333333;
+                border: 1px solid #d0d9e1;
+                border-radius: 4px;
+                padding: 5px;
+                opacity: 230;
+                font-size: 10pt;
+            }
+        """)
+
+    def embed_canvas(self, parent, fig):
         """
-        Fügt Text zum Ausgabefeld hinzu.
+        Bettet eine Matplotlib-Figur in ein PyQt-Widget ein.
+
+        Args:
+            parent: Das Eltern-Widget, in das die Figur eingebettet werden soll
+            fig: Die Matplotlib-Figur, die eingebettet werden soll
+
+        Returns:
+            canvas: Der erstellte MatplotlibCanvas
         """
-        self.root.after(0, lambda: self._append_to_output_direct(text))
-
-    def _append_to_output_direct(self, text):
-        """
-        Fügt Text direkt zum Ausgabefeld hinzu (wird vom Hauptthread aufgerufen).
-        """
-        self.output_text.config(state=tk.NORMAL)
-        self.output_text.insert(tk.END, text + "\n")
-        self.output_text.see(tk.END)
-        self.output_text.config(state=tk.DISABLED)
-
-    def _update_results_tab(self):
-        """
-        Aktualisiert die Modellauswahl im Ergebnisse-Tab.
-        """
-        # Aktualisiere die Modellauswahl
-        model_names = list(self.training_results.keys())
-        self.model_select_combobox['values'] = model_names
-
-        # Wähle das neueste Modell aus, falls vorhanden
-        if model_names:
-            self.model_select_combobox.set(model_names[-1])
-            self._on_model_selected()
-
-    def _on_model_selected(self, event=None):
-        """
-        Wird aufgerufen, wenn ein Modell im Ergebnisse-Tab ausgewählt wird.
-        """
-        model_key = self.model_select_var.get()
-        if not model_key or model_key not in self.training_results:
-            return
-
-        # Hole die Ergebnisse für das ausgewählte Modell
-        results = self.training_results[model_key]
-
-        # Aktualisiere die Metriken
-        self.accuracy_var.set(f"{results['accuracy']:.4f}")
-        self.precision_var.set(f"{results['precision']:.4f}")
-        self.recall_var.set(f"{results['recall']:.4f}")
-        self.f1_var.set(f"{results['f1']:.4f}")
-
-        # Aktualisiere den Klassifikationsbericht
-        self.report_text.config(state=tk.NORMAL)
-        self.report_text.delete(1.0, tk.END)
-        self.report_text.insert(tk.END, results['report'])
-        self.report_text.config(state=tk.DISABLED)
-
-        # Zeige die Konfusionsmatrix an
-        for widget in self.cm_frame.winfo_children():
-            widget.destroy()
-
-        fig, ax = plt.subplots(figsize=(5, 4))
-        # Store reference to the figure for cleanup
-        self.figures.append(fig)
-
-        conf_matrix = results['conf_matrix']
-        cax = ax.matshow(conf_matrix, cmap='Blues')
-        fig.colorbar(cax)
-
-        # Beschriftungen für die Konfusionsmatrix
-        ax.set_xlabel('Vorhergesagte Klasse')
-        ax.set_ylabel('Tatsächliche Klasse')
-        ax.set_title('Konfusionsmatrix')
-
-        # Füge die Werte in die Zellen ein
-        for i in range(conf_matrix.shape[0]):
-            for j in range(conf_matrix.shape[1]):
-                ax.text(j, i, str(conf_matrix[i, j]), ha='center', va='center')
-
-        # Erstelle ein Canvas für die Matplotlib-Figur
-        canvas = FigureCanvasTkAgg(fig, master=self.cm_frame)
+        # räume altes Canvas auf
+        layout = parent.layout()
+        if layout is None:
+            layout = QVBoxLayout(parent)
+            parent.setLayout(layout)
+        while layout.count():
+            old = layout.takeAt(0).widget()
+            if old:
+                old.setParent(None)
+        canvas = MatplotlibCanvas(parent)
+        canvas.fig = fig
+        canvas.axes = fig.axes[0] if fig.axes else fig.add_subplot(111)
         canvas.draw()
-        canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+        layout.addWidget(canvas)
+        self.figures.append(fig)  # zur Aufräum-Liste
+        return canvas
 
     def cleanup_resources(self):
         """
@@ -632,95 +616,229 @@ class TextClassificationGUI:
         self.figures = []
         plt.close('all')
 
+    def on_tab_changed(self, index):
+        """
+        Wird aufgerufen, wenn der Tab gewechselt wird.
+        Passt die Layouts an, um sicherzustellen, dass alle Inhalte korrekt angezeigt werden.
 
-# Register a global cleanup function to ensure matplotlib figures are closed
-# This is a fallback in case the normal cleanup doesn't happen
-def global_cleanup():
-    plt.close('all')
+        Args:
+            index: Index des neuen Tabs
+        """
+        # Aktualisiere das Layout des aktuellen Tabs
+        current_tab = self.tab_widget.widget(index)
+        if current_tab:
+            # Erzwinge ein Update des Layouts
+            current_tab.layout().activate()
+            current_tab.layout().update()
 
-# Register the global cleanup function to be called at exit
-atexit.register(global_cleanup)
+            # Wenn es der Ergebnisse-Tab ist, aktualisiere die Textfelder und Visualisierungen
+            if index == 1 and hasattr(self, 'report_text'):
+                # Stelle sicher, dass der Text im Klassifikationsbericht korrekt angezeigt wird
+                self.report_text.document().adjustSize()
 
+                # Aktualisiere alle Visualisierungen, falls ein Modell ausgewählt ist
+                if hasattr(self, 'model_select_combo') and self.model_select_combo.currentText():
+                    model_key = self.model_select_combo.currentText()
+                    if model_key in self.training_results:
+                        # Hole die Ergebnisse für das ausgewählte Modell
+                        results = self.training_results[model_key]
+
+                        # Rufe on_model_selected auf, um alle Visualisierungen zu aktualisieren
+                        logger = setup_logging("gui")
+                        logger.info(f"Tab gewechselt zu Ergebnisse, aktualisiere Visualisierungen für Modell '{model_key}'")
+
+                        # Finde den Index des Modells in der ComboBox
+                        index = self.model_select_combo.findText(model_key)
+                        if index >= 0:
+                            # Rufe on_model_selected auf, um alle Visualisierungen zu aktualisieren
+                            self.on_model_selected(index)
+                        else:
+                            logger.warning(f"Modell '{model_key}' nicht in ComboBox gefunden")
+                    else:
+                        logger = setup_logging("gui")
+                        logger.warning(f"Modell '{model_key}' nicht in training_results gefunden")
+
+            # Wenn es der Konfusionsmatrix-Tab ist, aktualisiere die Konfusionsmatrix
+            elif index == 2 and hasattr(self, 'confusion_model_select_combo'):
+                # Aktualisiere die Konfusionsmatrix, falls vorhanden
+                if hasattr(self, 'confusion_model_select_combo') and self.confusion_model_select_combo.currentText():
+                    model_key = self.confusion_model_select_combo.currentText()
+                    if model_key in self.training_results:
+                        # Prüfe, ob die Konfusionsmatrix ein gültiges numpy-Array ist
+                        conf_matrix = self.training_results[model_key].get('conf_matrix')
+                        if isinstance(conf_matrix, np.ndarray):
+                            # Prüfe, ob conf_matrix ein leeres Array ist und konvertiere es ggf. in ein 2D-Array
+                            if conf_matrix.size == 0:
+                                logger = setup_logging("gui")
+                                logger.warning(f"Konfusionsmatrix für Modell '{model_key}' ist leer, wird in 2x2-Matrix umgewandelt")
+                                conf_matrix = np.zeros((2, 2), dtype=np.int32)
+                                # Aktualisiere die Konfusionsmatrix im training_results Dictionary
+                                self.training_results[model_key]['conf_matrix'] = conf_matrix
+
+                            # Prüfe, ob conf_matrix die richtige Form hat
+                            if len(conf_matrix.shape) != 2:
+                                logger = setup_logging("gui")
+                                logger.warning(f"Konfusionsmatrix für Modell '{model_key}' hat ein ungültiges Format, wird in 2x2-Matrix umgewandelt")
+                                conf_matrix = np.zeros((2, 2), dtype=np.int32)
+                                # Aktualisiere die Konfusionsmatrix im training_results Dictionary
+                                self.training_results[model_key]['conf_matrix'] = conf_matrix
+
+                            # Prüfe, ob die Dimensionen zu klein sind
+                            if conf_matrix.shape[0] < 2 or conf_matrix.shape[1] < 2:
+                                logger = setup_logging("gui")
+                                logger.warning(f"Konfusionsmatrix für Modell '{model_key}' hat zu kleine Dimensionen, wird auf 2x2 erweitert")
+                                new_conf_matrix = np.zeros((2, 2), dtype=np.int32)
+                                rows = min(conf_matrix.shape[0], 2)
+                                cols = min(conf_matrix.shape[1], 2)
+                                new_conf_matrix[:rows, :cols] = conf_matrix[:rows, :cols]
+                                conf_matrix = new_conf_matrix
+                                # Aktualisiere die Konfusionsmatrix im training_results Dictionary
+                                self.training_results[model_key]['conf_matrix'] = conf_matrix
+
+                            # Aktualisiere die Konfusionsmatrix
+                            self.update_confusion_matrix(conf_matrix)
+                        else:
+                            logger = setup_logging("gui")
+                            logger.warning(f"Konfusionsmatrix für Modell '{model_key}' ist kein numpy-Array, wird in 2x2-Matrix umgewandelt")
+                            conf_matrix = np.zeros((2, 2), dtype=np.int32)
+                            # Aktualisiere die Konfusionsmatrix im training_results Dictionary
+                            self.training_results[model_key]['conf_matrix'] = conf_matrix
+                            # Aktualisiere die Konfusionsmatrix
+                            self.update_confusion_matrix(conf_matrix)
+
+    def closeEvent(self, event):
+        """
+        Wird aufgerufen, wenn das Fenster geschlossen wird.
+        """
+        # Speichere die Trainingsergebnisse
+        self.save_training_results()
+
+        # Bereinige Ressourcen
+        self.cleanup_resources()
+        event.accept()
+
+    def load_training_results(self):
+        """
+        Lädt gespeicherte Trainingsergebnisse aus einer Datei.
+        """
+        try:
+            # Stelle sicher, dass das Verzeichnis existiert
+            os.makedirs(os.path.dirname(self.results_file), exist_ok=True)
+
+            # Prüfe, ob die Datei existiert
+            if os.path.exists(self.results_file):
+                try:
+                    with open(self.results_file, 'rb') as f:
+                        # Lade die Trainingsergebnisse
+                        loaded_results = pickle.load(f)
+
+                        # Validiere die geladenen Ergebnisse
+                        if not isinstance(loaded_results, dict):
+                            logger = setup_logging("gui")
+                            logger.warning(f"Warnung: Geladene Trainingsergebnisse sind kein Dictionary, sondern {type(loaded_results)}")
+                            self.training_results = {}
+                        else:
+                            # Validiere jedes Modell in den Ergebnissen
+                            valid_results = {}
+                            for key, model_data in loaded_results.items():
+                                if not isinstance(model_data, dict):
+                                    logger = setup_logging("gui")
+                                    logger.warning(f"Warnung: Modell '{key}' hat ungültiges Format, wird übersprungen")
+                                    continue
+
+                                # Prüfe, ob alle erforderlichen Schlüssel vorhanden sind
+                                required_keys = ['accuracy', 'precision', 'recall', 'f1', 'report', 'conf_matrix', 'model_type', 'target_column']
+                                missing_keys = [k for k in required_keys if k not in model_data]
+                                if missing_keys:
+                                    logger = setup_logging("gui")
+                                    logger.warning(f"Warnung: Modell '{key}' fehlen Schlüssel: {missing_keys}, wird übersprungen")
+                                    continue
+
+                                # Prüfe, ob die Modelldatei noch existiert
+                                model_type = model_data['model_type']
+                                target_column = model_data['target_column']
+
+                                # Bestimme den Pfad zur Modelldatei basierend auf dem Modelltyp
+                                model_exists = False
+                                if model_type == 'logreg':
+                                    # Suche nach Logistic Regression Modellen im MODELS_DIR
+                                    model_pattern = f"logreg_{target_column}_*_model.pkl"
+                                    model_files = [f for f in os.listdir(MODELS_DIR) if f.startswith(f"logreg_{target_column}_") and f.endswith("_model.pkl")]
+                                    model_exists = len(model_files) > 0
+                                elif model_type == 'nn':
+                                    # Suche nach Neural Network Modellen im CHECKPOINTS_DIR
+                                    checkpoint_path = os.path.join(CHECKPOINTS_DIR, f"{target_column}_best_model.pt")
+                                    model_exists = os.path.exists(checkpoint_path)
+
+                                if not model_exists:
+                                    logger = setup_logging("gui")
+                                    logger.warning(f"Warnung: Modelldatei für '{key}' existiert nicht mehr, wird übersprungen")
+                                    continue
+
+                                # Prüfe, ob conf_matrix ein gültiges numpy-Array ist
+                                if not isinstance(model_data['conf_matrix'], np.ndarray):
+                                    logger = setup_logging("gui")
+                                    logger.warning(f"Warnung: Konfusionsmatrix für Modell '{key}' ist kein numpy-Array, wird übersprungen")
+                                    continue
+
+                                # Prüfe, ob conf_matrix ein leeres Array ist und konvertiere es ggf. in ein 2D-Array
+                                if model_data['conf_matrix'].size == 0:
+                                    logger = setup_logging("gui")
+                                    logger.warning(f"Warnung: Konfusionsmatrix für Modell '{key}' ist leer, wird in 2x2-Matrix umgewandelt")
+                                    model_data['conf_matrix'] = np.zeros((2, 2), dtype=np.int32)
+
+                                # Modell ist gültig, füge es zu den validierten Ergebnissen hinzu
+                                valid_results[key] = model_data
+
+                            self.training_results = valid_results
+                            logger = setup_logging("gui")
+                            logger.info(f"Trainingsergebnisse geladen: {len(self.training_results)} gültige Modelle von {len(loaded_results)} gefunden.")
+                except (pickle.UnpicklingError, EOFError) as pe:
+                    logger = setup_logging("gui")
+                    logger.error(f"Fehler beim Entpacken der Trainingsergebnisse: {str(pe)}")
+                    logger.error("Die Datei mit den Trainingsergebnissen ist möglicherweise beschädigt.")
+                    self.training_results = {}
+            else:
+                logger = setup_logging("gui")
+                logger.info("Keine gespeicherten Trainingsergebnisse gefunden.")
+                self.training_results = {}
+        except Exception as e:
+            logger = setup_logging("gui")
+            logger.error(f"Fehler beim Laden der Trainingsergebnisse: {str(e)}")
+            # Initialisiere mit leerem Dictionary im Fehlerfall
+            self.training_results = {}
+
+    def save_training_results(self):
+        """
+        Speichert die Trainingsergebnisse in einer Datei.
+        """
+        try:
+            # Stelle sicher, dass das Verzeichnis existiert
+            os.makedirs(os.path.dirname(self.results_file), exist_ok=True)
+
+            # Speichere die Trainingsergebnisse
+            with open(self.results_file, 'wb') as f:
+                pickle.dump(self.training_results, f)
+                logger = setup_logging("gui")
+                logger.info(f"Trainingsergebnisse gespeichert: {len(self.training_results)} Modelle.")
+        except Exception as e:
+            logger = setup_logging("gui")
+            logger.error(f"Fehler beim Speichern der Trainingsergebnisse: {str(e)}")
+
+# Hauptfunktion für die Standard-GUI
 def main():
     """
-    Hauptfunktion zum Starten der GUI.
+    Hauptfunktion zum Starten der Standard-GUI.
     """
-    try:
-        # Verwende ThemedTk statt Tk für ein modernes Erscheinungbild
-        root = ThemedTk(theme="arc")  # Moderne Themes: 'arc', 'equilux', 'breeze', etc.
+    # Erstelle die QApplication
+    app = QApplication(sys.argv)
 
-        # Aktiviere DPI-Skalierung für bessere Darstellung auf hochauflösenden Displays
-        try:
-            windll.shcore.SetProcessDpiAwareness(1)
-        except:
-            pass  # Ignoriere Fehler, falls nicht auf Windows oder DPI-Skalierung nicht unterstützt wird
+    # Erstelle und zeige das Hauptfenster
+    window = ModernTextClassificationGUI()
+    window.show()
 
-        # Konfiguriere den Stil
-        style = ThemedStyle(root)
-
-        # Bestimme den Skalierungsfaktor basierend auf der Bildschirmauflösung
-        scale_factor = root.winfo_fpixels('1i') / 96.0  # Standard-DPI ist 96
-        font_size = int(10 * scale_factor)
-        font_size = max(9, min(font_size, 14))  # Begrenze Schriftgröße zwischen 9 und 14
-
-        # Grundlegende Schriftarten und Stile konfigurieren mit Skalierung
-        style.configure('TButton', font=('Segoe UI', font_size))
-        style.configure('TLabel', font=('Segoe UI', font_size))
-        style.configure('TLabelframe.Label', font=('Segoe UI', font_size, 'bold'))
-        style.configure('TNotebook.Tab', font=('Segoe UI', font_size))
-        style.configure('TEntry', font=('Segoe UI', font_size))
-        style.configure('TCombobox', font=('Segoe UI', font_size))
-
-        # Spezielle Stile für Buttons
-        style.configure('Action.TButton', font=('Segoe UI', font_size, 'bold'))
-        style.map('Action.TButton', 
-                  background=[('active', '#3498db'), ('pressed', '#2980b9')],
-                  foreground=[('active', 'white'), ('pressed', 'white')])
-
-        # Setze den Fenstertitel und Icon
-        root.title("Textklassifikation - Moderne Benutzeroberfläche")
-
-        # Erstelle die Anwendung
-        app = TextClassificationGUI(root)
-
-        # Register cleanup function for window close event
-        def on_closing():
-            app.cleanup_resources()
-            # Schedule destroy after all pending events are processed
-            root.after(100, root.quit)
-
-        root.protocol("WM_DELETE_WINDOW", on_closing)
-
-        # Zentriere das Fenster auf dem Bildschirm
-        root.update_idletasks()
-        width = root.winfo_width()
-        height = root.winfo_height()
-        x = (root.winfo_screenwidth() // 2) - (width // 2)
-        y = (root.winfo_screenheight() // 2) - (height // 2)
-        root.geometry('{}x{}+{}+{}'.format(width, height, x, y))
-
-        # Starte die Hauptschleife
-        root.mainloop()
-
-    except Exception as e:
-        # Fallback für den Fall, dass ttkthemes nicht verfügbar ist
-        print(f"Fehler beim Starten der modernen UI: {str(e)}")
-        print("Starte mit Standard-UI...")
-
-        root = tk.Tk()
-        root.title("Textklassifikation - Benutzeroberfläche")
-        app = TextClassificationGUI(root)
-
-        # Register cleanup function for window close event in fallback mode
-        def on_closing():
-            app.cleanup_resources()
-            # Schedule destroy after all pending events are processed
-            root.after(100, root.quit)
-
-        root.protocol("WM_DELETE_WINDOW", on_closing)
-
-        root.mainloop()
-
+    # Starte die Anwendung
+    sys.exit(app.exec_())
 
 if __name__ == "__main__":
     main()

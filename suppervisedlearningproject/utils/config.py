@@ -59,49 +59,51 @@ def setup_logging(module_name: str, log_level: int = logging.INFO,
                  console_output: bool = True) -> logging.Logger:
     """
     Richtet das Logging für ein Modul ein.
-    
+
     Args:
         module_name: Name des Moduls, für das das Logging eingerichtet wird
         log_level: Logging-Level (Standard: INFO)
         console_output: Ob Logs auch in der Konsole ausgegeben werden sollen
-        
+
     Returns:
         Logger-Instanz für das angegebene Modul
     """
     logger = logging.getLogger(module_name)
-    
+
     # Wenn der Logger bereits Handler hat, geben wir ihn einfach zurück
     if logger.handlers:
         return logger
-        
+
     logger.setLevel(log_level)
-    
+
     # Formatierung der Logeinträge
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    
+
     # Datei-Handler
     log_file = os.path.join(LOGS_DIR, f"{module_name.split('.')[-1]}.log")
-    file_handler = logging.FileHandler(log_file)
+    # Verwende cp1252 (Windows-1252) Kodierung für deutsche Umlaute
+    # UTF-8 kann zu Problemen führen, wenn die Logdateien in bestimmten Editoren geöffnet werden
+    file_handler = logging.FileHandler(log_file, encoding='cp1252')
     file_handler.setFormatter(formatter)
     logger.addHandler(file_handler)
-    
+
     # Konsolen-Handler (optional)
     if console_output:
         console_handler = logging.StreamHandler(sys.stdout)
         console_handler.setFormatter(formatter)
         logger.addHandler(console_handler)
-    
+
     return logger
 
 def get_model_path(model_type: str, target_column: str, timestamp: str) -> str:
     """
     Generiert den Pfad für ein zu speicherndes Modell.
-    
+
     Args:
         model_type: Typ des Modells ('logreg' oder 'nn')
         target_column: Name der Zielspalte
         timestamp: Zeitstempel für den Dateinamen
-        
+
     Returns:
         Vollständiger Pfad zur Modelldatei
     """
@@ -115,12 +117,12 @@ def get_model_path(model_type: str, target_column: str, timestamp: str) -> str:
 def get_plot_path(plot_type: str, target_column: str, timestamp: str) -> str:
     """
     Generiert den Pfad für eine zu speichernde Visualisierung.
-    
+
     Args:
         plot_type: Typ der Visualisierung ('confusion_matrix' oder 'training_history')
         target_column: Name der Zielspalte
         timestamp: Zeitstempel für den Dateinamen
-        
+
     Returns:
         Vollständiger Pfad zur Bilddatei
     """

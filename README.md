@@ -13,14 +13,14 @@ Die Projektstruktur wurde nach Best-Practice-Prinzipien organisiert:
     - `train_logreg.py`: Training von logistischen Regressionsmodellen
     - `train_nn.py`: Training von neuronalen Netzwerken
   - `ui/`: Benutzeroberflächen
-    - `gui.py`: Standard-GUI (Tkinter)
-    - `modern_gui_complete.py`: Moderne GUI (PyQt5)
+    - `gui.py`: Basis der modernen GUI (PyQt5)
+    - `gui_tabs.py`: Tab-Implementierungen für die moderne GUI
+    - `gui_complete.py`: Vollständige moderne GUI (PyQt5)
   - `utils/`: Hilfsfunktionen
     - `config.py`: Konfigurationseinstellungen
   - `icons/`: Icons für die GUI
   - `main.py`: Hauptmodul zur Orchestrierung des Trainings
-- `run_gui.py`: Startskript für die Standard-GUI (Tkinter)
-- `run_modern_gui.py`: Startskript für die moderne GUI (PyQt5)
+- `run_gui.py`: Startskript für die moderne GUI (PyQt5)
 - `data/`: Datendateien
   - `Daten_UTF8_Clean_encoded.csv`: Hauptdatendatei
   - `Daten_UTF8_Clean_encoded_part1.csv`, `Daten_UTF8_Clean_encoded_part2.csv`: Geteilte Datendateien
@@ -63,24 +63,23 @@ Folgende Änderungen wurden an der ursprünglichen Codebasis vorgenommen:
      - `technical/`: Technische Dokumentation für Entwickler
      - `tutorials/`: Einfache Anleitungen für Nicht-Coder
 
-5. **Grafische Benutzeroberfläche hinzugefügt**:
-   - Benutzerfreundliche GUI mit tkinter implementiert
+5. **Moderne grafische Benutzeroberfläche hinzugefügt**:
+   - Benutzerfreundliche GUI mit PyQt5 implementiert
+   - Modernes Design mit intuitivem Look-and-Feel
    - Formular zur Konfiguration von Modellparametern
-   - Visualisierung von Trainingsergebnissen (Metriken, Konfusionsmatrix)
+   - Verbesserte Visualisierung von Trainingsergebnissen (Metriken, Konfusionsmatrix)
    - Dokumentation zur Verwendung der GUI in `docs/user_guides/gui_anleitung.md`
    - Einfaches Startskript `run_gui.py` für den schnellen Einstieg
 
 ## Verwendung der GUI
 
-### Standard-GUI (Tkinter)
-
-Um die Standard-GUI zu starten, führen Sie das folgende Kommando im Hauptverzeichnis des Projekts aus:
+Um die moderne GUI zu starten, führen Sie das folgende Kommando im Hauptverzeichnis des Projekts aus:
 
 ```bash
 python run_gui.py
 ```
 
-Die GUI bietet folgende Funktionen:
+Die moderne GUI bietet folgende Funktionen:
 
 - Auswahl des Modelltyps (logistische Regression, neuronales Netz oder beide)
 - Konfiguration der Hyperparameter
@@ -88,28 +87,23 @@ Die GUI bietet folgende Funktionen:
 - Visualisierung der Trainingsergebnisse
 - Anzeige von Metriken, Konfusionsmatrix und Klassifikationsbericht
 
-### Moderne GUI (PyQt5)
+### Besonderheiten der modernen GUI
 
-Alternativ können Sie die moderne GUI mit PyQt5 starten, die ein ansprechenderes Look-and-Feel bietet:
-
-```bash
-python run_modern_gui.py
-```
-
-Die moderne GUI bietet die gleichen Funktionen wie die Standard-GUI, aber mit einem moderneren Design:
+Die moderne GUI zeichnet sich durch folgende Merkmale aus:
 
 - Flaches, modernes Design mit ansprechenden Farben und Schattierungen
 - Verbesserte Benutzerfreundlichkeit durch intuitivere Bedienelemente
 - Responsives Layout, das sich an verschiedene Bildschirmgrößen anpasst
 - Verbesserte Visualisierungen mit interaktiven Elementen
 
-Für die Verwendung der modernen GUI wird PyQt5 benötigt. Das Startskript prüft automatisch, ob PyQt5 installiert ist und bietet folgende Optionen:
+### PyQt5-Abhängigkeit
+
+Für die Verwendung der GUI wird PyQt5 benötigt. Das Startskript prüft automatisch, ob PyQt5 installiert ist und bietet folgende Optionen:
 
 1. **Automatische Installation**: Sie können PyQt5 direkt aus dem Skript heraus installieren, wenn Sie dazu aufgefordert werden.
 2. **Manuelle Installation**: Sie können PyQt5 auch manuell mit folgendem Befehl installieren:
    ```bash
-   pip install PyQt5
+   pip install PyQt5>=5.15.0
    ```
-3. **Fallback zur Standard-GUI**: Wenn Sie PyQt5 nicht installieren möchten, können Sie stattdessen die Standard-GUI verwenden, die keine zusätzlichen Abhängigkeiten benötigt.
 
 Eine detaillierte Anleitung zur Verwendung der GUI finden Sie in der Datei `docs/user_guides/gui_anleitung.md`.

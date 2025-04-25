@@ -6,10 +6,10 @@ Diese technische Dokumentation beschreibt die Implementierung der modernen grafi
 
 Die moderne GUI ist in mehrere Module aufgeteilt, um die Wartbarkeit und Erweiterbarkeit zu verbessern:
 
-1. **modern_gui.py**: Enthält die Basisklassen und grundlegende Funktionalität
-2. **modern_gui_tabs.py**: Enthält die Implementierung der verschiedenen Tabs
-3. **modern_gui_complete.py**: Integriert die beiden Module zu einer vollständigen Anwendung
-4. **run_modern_gui.py**: Startskript für die Anwendung
+1. **gui.py**: Enthält die Basisklassen und grundlegende Funktionalität
+2. **gui_tabs.py**: Enthält die Implementierung der verschiedenen Tabs
+3. **gui_complete.py**: Integriert die beiden Module zu einer vollständigen Anwendung
+4. **run_gui.py**: Startskript für die Anwendung
 
 ### Klassendiagramm
 
@@ -29,7 +29,7 @@ Die moderne GUI verwendet folgende Technologien:
 
 ## Modulbeschreibungen
 
-### modern_gui.py
+### gui.py
 
 Dieses Modul enthält die Basisklassen für die GUI:
 
@@ -42,7 +42,7 @@ Die ModernTextClassificationGUI-Klasse enthält:
 - Stylesheet-Definitionen für das moderne Aussehen
 - Grundlegende UI-Struktur mit Tabs
 
-### modern_gui_tabs.py
+### gui_tabs.py
 
 Dieses Modul enthält die Implementierung der verschiedenen Tabs und der zugehörigen Funktionalität:
 
@@ -51,9 +51,9 @@ Dieses Modul enthält die Implementierung der verschiedenen Tabs und der zugehö
 - **init_about_tab**: Initialisiert den Über-Tab mit Informationen
 - Verschiedene Hilfsfunktionen für die Interaktion mit der GUI
 
-### modern_gui_complete.py
+### gui_complete.py
 
-Dieses Modul integriert die Basisklassen aus modern_gui.py mit den Tab-Implementierungen aus modern_gui_tabs.py:
+Dieses Modul integriert die Basisklassen aus gui.py mit den Tab-Implementierungen aus gui_tabs.py:
 
 ```python
 # Erweitere die ModernTextClassificationGUI-Klasse um die Tab-Implementierungen
@@ -63,7 +63,7 @@ ModernTextClassificationGUI.init_about_tab = init_about_tab
 # ... weitere Methoden
 ```
 
-### run_modern_gui.py
+### run_gui.py
 
 Dieses Skript dient als Einstiegspunkt für die Anwendung:
 
@@ -106,8 +106,8 @@ Das Styling der GUI wird über ein Stylesheet in der `set_stylesheet`-Methode de
 
 Um einen neuen Tab hinzuzufügen:
 
-1. Erstellen Sie eine neue Methode `init_new_tab` in modern_gui_tabs.py
-2. Fügen Sie die Methode zur ModernTextClassificationGUI-Klasse in modern_gui_complete.py hinzu
+1. Erstellen Sie eine neue Methode `init_new_tab` in gui_tabs.py
+2. Fügen Sie die Methode zur ModernTextClassificationGUI-Klasse in gui_complete.py hinzu
 3. Rufen Sie die Methode in der `init_ui`-Methode auf
 
 ### Hinzufügen eines neuen Modelltyps

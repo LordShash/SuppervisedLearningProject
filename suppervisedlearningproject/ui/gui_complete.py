@@ -1,16 +1,17 @@
 """
 Vollständige Implementierung der modernen GUI für die Textklassifikationsanwendung.
 
-Dieses Modul integriert die Basisklassen aus modern_gui.py mit den Tab-Implementierungen
-aus modern_gui_tabs.py zu einer vollständigen GUI-Anwendung.
+Dieses Modul integriert die Basisklassen aus gui.py mit den Tab-Implementierungen
+aus gui_tabs.py zu einer vollständigen GUI-Anwendung.
 """
 
-from suppervisedlearningproject.ui.modern_gui import ModernTextClassificationGUI
-from suppervisedlearningproject.ui.modern_gui_tabs import (
+from suppervisedlearningproject.ui.gui import ModernTextClassificationGUI
+from suppervisedlearningproject.ui.gui_tabs import (
     init_training_tab, init_results_tab, init_about_tab,
     create_label_with_tooltip, toggle_model_options, train_model,
     append_to_output, on_training_finished, on_training_error,
-    update_results_tab, on_model_selected, update_confusion_matrix
+    update_results_tab, on_model_selected, update_confusion_matrix,
+    compare_models, update_compare_models_combo, update_roc_curve, update_model_comparison
 )
 
 
@@ -27,3 +28,7 @@ ModernTextClassificationGUI.on_training_error = on_training_error
 ModernTextClassificationGUI.update_results_tab = update_results_tab
 ModernTextClassificationGUI.on_model_selected = on_model_selected
 ModernTextClassificationGUI.update_confusion_matrix = update_confusion_matrix
+ModernTextClassificationGUI.compare_models = compare_models
+ModernTextClassificationGUI.update_compare_models_combo = update_compare_models_combo
+ModernTextClassificationGUI.update_roc_curve = update_roc_curve
+ModernTextClassificationGUI.update_model_comparison = update_model_comparison

@@ -21,7 +21,7 @@ import matplotlib
 matplotlib.use('Agg', force=True)
 import matplotlib.pyplot as plt
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score, classification_report, precision_score, recall_score, f1_score, confusion_matrix
+from sklearn.metrics import accuracy_score, classification_report, precision_score, recall_score, f1_score, confusion_matrix, roc_curve, auc, roc_auc_score
 from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
@@ -48,6 +48,56 @@ class ModelResults:
     conf_matrix: np.ndarray
     class_names: list
     cross_val_scores: Optional[np.ndarray] = None
+    roc_curve_data: Optional[Dict[str, np.ndarray]] = None
+    auc_scores: Optional[Dict[str, float]] = None
+
+
+def plot_confusion_matrix(conf_matrix: np.ndarray, class_names: list, target_name: str, timestamp: str = None) -> str:
+    """
+    Erstellt und speichert eine Visualisierung der Konfusionsmatrix.
+
+    Args:
+        conf_matrix: Die Konfusionsmatrix als numpy-Array
+        class_names: Liste mit den Namen der Klassen
+        target_name: Name der Zielspalte für den Dateinamen
+        timestamp: Optionaler Zeitstempel für den Dateinamen
+
+    Returns:
+        str: Pfad zur gespeicherten Visualisierung
+    """
+    if timestamp is None:
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    # Visualisierung der Konfusionsmatrix
+    plt.figure(figsize=(10, 8))
+    plt.imshow(conf_matrix, interpolation='nearest', cmap=plt.cm.Blues)
+    plt.title(f'Konfusionsmatrix für {target_name}')
+    plt.colorbar()
+
+    # Beschriftungen
+    tick_marks = np.arange(len(class_names))
+    plt.xticks(tick_marks, class_names, rotation=45)
+    plt.yticks(tick_marks, class_names)
+
+    # Werte in der Matrix anzeigen
+    thresh = conf_matrix.max() / 2.
+    for i in range(conf_matrix.shape[0]):
+        for j in range(conf_matrix.shape[1]):
+            plt.text(j, i, format(conf_matrix[i, j], 'd'),
+                    ha="center", va="center",
+                    color="white" if conf_matrix[i, j] > thresh else "black")
+
+    plt.tight_layout()
+    plt.xlabel('Vorhergesagte Klasse')
+    plt.ylabel('Tatsächliche Klasse')
+
+    # Speichere die Visualisierung
+    plot_path = os.path.join(PLOTS_DIR, f'confusion_matrix_{target_name}_{timestamp}.png')
+    plt.savefig(plot_path)
+    plt.close()
+
+    logger.info(f"Konfusionsmatrix-Visualisierung gespeichert: {plot_path}")
+    return plot_path
 
 
 def train_logistic_regression(
@@ -124,6 +174,9 @@ def train_logistic_regression(
         # Vorhersagen auf den Testdaten
         y_pred = pipeline.predict(X_test)
 
+        # Berechne Wahrscheinlichkeiten für ROC-Kurve
+        y_pred_proba = pipeline.predict_proba(X_test)
+
         # Berechnung der Metriken
         accuracy = accuracy_score(y_test, y_pred)
         precision = precision_score(y_test, y_pred, average='weighted')
@@ -150,25 +203,66 @@ def train_logistic_regression(
         logger.info("\nKlassifikationsbericht:")
         logger.info(f"\n{report}")
 
-        # Visualisierung der Konfusionsmatrix (optional)
+        # Visualisierung der Konfusionsmatrix mit der dedizierten Funktion
         try:
-            plt.figure(figsize=(10, 8))
-            plt.imshow(conf_matrix, interpolation='nearest', cmap=plt.cm.Blues)
-            plt.title(f'Konfusionsmatrix für {target_name}')
-            plt.colorbar()
-            tick_marks = np.arange(len(class_names))
-            plt.xticks(tick_marks, class_names, rotation=45)
-            plt.yticks(tick_marks, class_names)
-            plt.xlabel('Vorhergesagte Klasse')
-            plt.ylabel('Tatsächliche Klasse')
-            plt.tight_layout()
-
-            # Speichere die Visualisierung
             timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            plt.savefig(os.path.join(PLOTS_DIR, f'confusion_matrix_{target_name}_{timestamp}.png'))
-            logger.info(f"Konfusionsmatrix-Visualisierung gespeichert")
+            plot_path = plot_confusion_matrix(conf_matrix, class_names, target_name, timestamp)
+            logger.info(f"Konfusionsmatrix-Visualisierung gespeichert: {plot_path}")
         except Exception as viz_error:
             logger.warning(f"Konnte Konfusionsmatrix nicht visualisieren: {str(viz_error)}")
+
+        # Berechne ROC-Kurve und AUC für jede Klasse
+        roc_curve_data = {}
+        auc_scores = {}
+
+        try:
+            # Für binäre Klassifikation
+            if len(class_names) == 2:
+                # Verwende die Wahrscheinlichkeit der positiven Klasse (Index 1)
+                fpr, tpr, thresholds = roc_curve(y_test, y_pred_proba[:, 1], pos_label=1)
+                roc_auc = auc(fpr, tpr)
+
+                roc_curve_data["binary"] = {
+                    "fpr": fpr,
+                    "tpr": tpr,
+                    "thresholds": thresholds
+                }
+                auc_scores["binary"] = roc_auc
+
+                logger.info(f"AUC für binäre Klassifikation: {roc_auc:.4f}")
+
+            # Für Mehrklassen-Klassifikation (One-vs-Rest)
+            else:
+                # Berechne ROC-Kurve und AUC für jede Klasse
+                for i, class_name in enumerate(class_names):
+                    # One-vs-Rest: aktuelle Klasse vs. alle anderen
+                    y_test_binary = (y_test == i).astype(int)
+                    y_score = y_pred_proba[:, i]
+
+                    fpr, tpr, thresholds = roc_curve(y_test_binary, y_score)
+                    roc_auc = auc(fpr, tpr)
+
+                    roc_curve_data[class_name] = {
+                        "fpr": fpr,
+                        "tpr": tpr,
+                        "thresholds": thresholds
+                    }
+                    auc_scores[class_name] = roc_auc
+
+                    logger.info(f"AUC für Klasse '{class_name}': {roc_auc:.4f}")
+
+                # Berechne auch den gewichteten Durchschnitt der AUC-Werte
+                try:
+                    weighted_auc = roc_auc_score(y_test, y_pred_proba, multi_class='ovr', average='weighted')
+                    auc_scores["weighted"] = weighted_auc
+                    logger.info(f"Gewichteter AUC: {weighted_auc:.4f}")
+                except Exception as auc_error:
+                    logger.warning(f"Konnte gewichteten AUC nicht berechnen: {str(auc_error)}")
+
+        except Exception as roc_error:
+            logger.warning(f"Konnte ROC-Kurve nicht berechnen: {str(roc_error)}")
+            roc_curve_data = None
+            auc_scores = None
 
         # Erstelle und gib ModelResults-Objekt zurück
         results = ModelResults(
@@ -180,7 +274,9 @@ def train_logistic_regression(
             report=report,
             conf_matrix=conf_matrix,
             class_names=class_names,
-            cross_val_scores=cv_scores
+            cross_val_scores=cv_scores,
+            roc_curve_data=roc_curve_data,
+            auc_scores=auc_scores
         )
 
         return results

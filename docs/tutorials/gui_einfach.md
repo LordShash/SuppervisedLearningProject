@@ -37,7 +37,7 @@ Möchten Sie stattdessen die Standard-GUI starten? (j/n):
 Um die moderne GUI zu starten, führen Sie das folgende Kommando im Hauptverzeichnis des Projekts aus:
 
 ```bash
-python run_modern_gui.py
+python run_gui.py
 ```
 
 ## Überblick über die Benutzeroberfläche
